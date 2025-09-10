@@ -9,7 +9,7 @@ import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade, Merchant, MetalType, PaymentType } from '../../types';
+import { Trade, Merchant, MetalType, SettlementType, Stock } from '../../types';
 import { generateId, formatCurrency } from '../../utils/calculations';
 
 interface BuyFormData {
@@ -18,30 +18,43 @@ interface BuyFormData {
   weight: number;
   pricePerUnit: number;
   amountPaid: number;
-  paymentType: PaymentType;
+  settlementType: SettlementType;
   notes?: string;
 }
 
 export const Buy: React.FC = () => {
   const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
   const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
+  const [stock, setStock] = useLocalStorage<Stock[]>(STORAGE_KEYS.STOCK, []);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
-  const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '' });
+  const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '', olderDues: '' });
   
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<BuyFormData>({
     defaultValues: {
       metalType: 'gold',
-      paymentType: 'cash',
+      settlementType: 'cash',
     }
   });
 
+  const onError = (errors: any) => {
+    console.log('Form validation errors:', errors);
+    console.log('Current form values:', watchedValues);
+  };
+
   const watchedValues = watch();
-  const totalAmount = (watchedValues.weight || 0) * (watchedValues.pricePerUnit || 0);
-  const remainingAmount = totalAmount - (watchedValues.amountPaid || 0);
+  // const totalAmount = Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0)/10;
+  const totalAmount = watchedValues.metalType === 'gold'
+  ? Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0) / 10
+  : Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0);
+  const remainingAmount = Number(totalAmount )- Number(watchedValues.amountPaid || 0);
 
   const onSubmit = (data: BuyFormData) => {
+    console.log('Form submitted with data:', data);
     const selectedMerchant = merchants.find(m => m.id === data.merchantId);
-    if (!selectedMerchant) return;
+    if (!selectedMerchant) {
+      console.log('Merchant not found');
+      return;
+    }
 
     const newTrade: Trade = {
       id: generateId(),
@@ -53,35 +66,57 @@ export const Buy: React.FC = () => {
       pricePerUnit: data.pricePerUnit,
       totalAmount,
       amountPaid: data.amountPaid,
-      paymentType: data.paymentType,
+      settlementType: data.settlementType,
       notes: data.notes,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
+    console.log('Adding new trade:', newTrade);
     setTrades([...trades, newTrade]);
+
+    // Update stock levels
+    const updatedStock = stock.map(stockItem => {
+      if (stockItem.metalType === data.metalType) {
+        const weightInGrams = data.metalType === 'gold' ? Number(data.weight) : Number(data.weight * 1000); // Convert kg to grams for silver
+        const newQuantity = Number(stockItem.quantity) + Number(weightInGrams);
+        
+        
+        return {
+          ...stockItem,
+          quantity: newQuantity,
+          lastUpdated: new Date()
+        };
+      }
+      return stockItem;
+    });
+    setStock(updatedStock);
+
     reset();
     
     // Show success message (in real app, use toast)
-    alert('Purchase recorded successfully!');
+    alert('Purchase recorded successfully! Stock updated.');
   };
 
   const addMerchant = () => {
     if (!newMerchant.name.trim()) return;
+
+    // Parse older dues - if empty or invalid, default to 0
+    const olderDuesAmount = newMerchant.olderDues.trim() === '' ? 0 : Number(newMerchant.olderDues) || 0;
 
     const merchant: Merchant = {
       id: generateId(),
       name: newMerchant.name,
       phone: newMerchant.phone,
       email: newMerchant.email,
-      totalDue: 0,
+      totalDue: olderDuesAmount,
       totalOwe: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     setMerchants([...merchants, merchant]);
-    setNewMerchant({ name: '', phone: '', email: '' });
+    setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
     setShowAddMerchant(false);
   };
 
@@ -98,9 +133,9 @@ export const Buy: React.FC = () => {
     { value: 'silver', label: 'Silver' },
   ];
 
-  const paymentOptions = [
+  const settlementOptions = [
     { value: 'cash', label: 'Cash' },
-    { value: 'bank_transfer', label: 'Bank Transfer' },
+    { value: 'bill', label: 'Bill' },
   ];
 
   return (
@@ -120,7 +155,7 @@ export const Buy: React.FC = () => {
       </motion.div>
 
       <Card className="p-6">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-4">
           <div className="flex items-center space-x-2">
             <div className="flex-1">
               <Select
@@ -147,9 +182,9 @@ export const Buy: React.FC = () => {
               {...register('metalType')}
             />
             <Select
-              label="Payment Type"
-              options={paymentOptions}
-              {...register('paymentType')}
+              label="Settlement Type"
+              options={settlementOptions}
+              {...register('settlementType')}
             />
           </div>
 
@@ -199,7 +234,12 @@ export const Buy: React.FC = () => {
             {...register('amountPaid', { 
               required: 'Amount paid is required',
               min: { value: 0, message: 'Amount cannot be negative' },
-              max: { value: totalAmount, message: 'Amount cannot exceed total' }
+              validate: (value) => {
+                if (totalAmount > 0 && value > totalAmount) {
+                  return 'Amount cannot exceed total';
+                }
+                return true;
+              }
             })}
             error={errors.amountPaid?.message}
           />
@@ -225,7 +265,7 @@ export const Buy: React.FC = () => {
           <Button
             type="submit"
             className="w-full"
-            disabled={!watchedValues.merchantId || !watchedValues.weight || !watchedValues.pricePerUnit}
+            disabled={!watchedValues.merchantId || !watchedValues.weight || !watchedValues.pricePerUnit || !watchedValues.amountPaid}
           >
             Record Purchase
           </Button>
@@ -257,6 +297,14 @@ export const Buy: React.FC = () => {
             placeholder="Enter email"
             value={newMerchant.email}
             onChange={(e) => setNewMerchant({ ...newMerchant, email: e.target.value })}
+          />
+          <Input
+            label="Older Dues (Optional)"
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            value={newMerchant.olderDues}
+            onChange={(e) => setNewMerchant({ ...newMerchant, olderDues: e.target.value })}
           />
           <Button onClick={addMerchant} className="w-full">
             Add Merchant

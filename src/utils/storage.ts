@@ -4,6 +4,8 @@ const STORAGE_KEYS = {
   MERCHANTS: 'trade_app_merchants',
   TRADES: 'trade_app_trades',
   EXPENSES: 'trade_app_expenses',
+  INCOME: 'trade_app_income',
+  STOCK: 'trade_app_stock',
 };
 
 export const storage = {

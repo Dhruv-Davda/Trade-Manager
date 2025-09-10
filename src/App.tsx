@@ -11,6 +11,7 @@ import { Settlement } from './components/trades/Settlement';
 import { TradeHistory } from './components/history/TradeHistory';
 import { Analytics } from './components/analytics/Analytics';
 import { Expenses } from './components/expenses/Expenses';
+import { IncomeManagement } from './components/income/Income';
 import { Merchants } from './components/merchants/Merchants';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -54,6 +55,7 @@ const AppContent: React.FC = () => {
           <Route path="history" element={<TradeHistory />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="expenses" element={<Expenses />} />
+          <Route path="income" element={<IncomeManagement />} />
           <Route path="merchants" element={<Merchants />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

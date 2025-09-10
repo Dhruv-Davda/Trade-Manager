@@ -25,7 +25,7 @@ export const Transfer: React.FC = () => {
   const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
   const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
-  const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '' });
+  const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '', olderDues: '' });
   
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<TransferFormData>({
     defaultValues: {
@@ -33,12 +33,22 @@ export const Transfer: React.FC = () => {
     }
   });
 
+  const onError = (errors: any) => {
+    console.log('Form validation errors:', errors);
+  };
+
   const watchedValues = watch();
-  const netAmount = (watchedValues.totalAmount || 0) + (watchedValues.transferCharges || 0);
+  const transferAmount = Number(watchedValues.totalAmount || 0);
+  const transferCharges = Number(watchedValues.transferCharges || 0);
+  const netAmount = transferAmount + transferCharges;
 
   const onSubmit = (data: TransferFormData) => {
+    console.log('Form submitted with data:', data);
     const selectedMerchant = merchants.find(m => m.id === data.merchantId);
-    if (!selectedMerchant) return;
+    if (!selectedMerchant) {
+      console.log('Merchant not found');
+      return;
+    }
 
     const newTrade: Trade = {
       id: generateId(),
@@ -63,19 +73,22 @@ export const Transfer: React.FC = () => {
   const addMerchant = () => {
     if (!newMerchant.name.trim()) return;
 
+    // Parse older dues - if empty or invalid, default to 0
+    const olderDuesAmount = newMerchant.olderDues.trim() === '' ? 0 : Number(newMerchant.olderDues) || 0;
+
     const merchant: Merchant = {
       id: generateId(),
       name: newMerchant.name,
       phone: newMerchant.phone,
       email: newMerchant.email,
-      totalDue: 0,
+      totalDue: olderDuesAmount,
       totalOwe: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     setMerchants([...merchants, merchant]);
-    setNewMerchant({ name: '', phone: '', email: '' });
+    setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
     setShowAddMerchant(false);
   };
 
@@ -104,7 +117,7 @@ export const Transfer: React.FC = () => {
       </motion.div>
 
       <Card className="p-6">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-4">
           <div className="flex items-center space-x-2">
             <div className="flex-1">
               <Select
@@ -152,7 +165,7 @@ export const Transfer: React.FC = () => {
               error={errors.totalAmount?.message}
             />
             <Input
-              label="Transfer Charges"
+              label="Transfer Charges (Your Profit)"
               type="number"
               step="0.01"
               placeholder="0.00"
@@ -167,22 +180,30 @@ export const Transfer: React.FC = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-gray-700 p-4 rounded-lg space-y-2"
+              className="bg-gradient-to-r from-secondary-800 to-secondary-700 p-4 rounded-lg space-y-2 border border-white/10"
             >
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Transfer Amount:</span>
-                <span className="text-white">{formatCurrency(watchedValues.totalAmount || 0)}</span>
+                <span className="text-secondary-300">Transfer Amount:</span>
+                <span className="text-white font-medium">{formatCurrency(transferAmount)}</span>
               </div>
-              {watchedValues.transferCharges > 0 && (
+              {transferCharges > 0 && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-300">Transfer Charges:</span>
-                  <span className="text-white">{formatCurrency(watchedValues.transferCharges)}</span>
+                  <span className="text-secondary-300">Transfer Charges (Your Profit):</span>
+                  <span className="text-success-400 font-medium">{formatCurrency(transferCharges)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-sm font-medium border-t border-gray-600 pt-2">
-                <span className="text-gray-300">Net Amount:</span>
+              <div className="flex justify-between items-center text-sm font-bold border-t border-white/20 pt-2">
+                <span className="text-secondary-300">Total Amount to Collect:</span>
                 <span className="text-white">{formatCurrency(netAmount)}</span>
               </div>
+              {transferCharges > 0 && (
+                <div className="mt-2 p-2 bg-success-500/10 rounded border border-success-500/20">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-success-300">Your Profit:</span>
+                    <span className="text-success-400 font-bold">{formatCurrency(transferCharges)}</span>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -227,6 +248,14 @@ export const Transfer: React.FC = () => {
             placeholder="Enter email"
             value={newMerchant.email}
             onChange={(e) => setNewMerchant({ ...newMerchant, email: e.target.value })}
+          />
+          <Input
+            label="Older Dues (Optional)"
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            value={newMerchant.olderDues}
+            onChange={(e) => setNewMerchant({ ...newMerchant, olderDues: e.target.value })}
           />
           <Button onClick={addMerchant} className="w-full">
             Add Merchant

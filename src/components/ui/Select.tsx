@@ -6,33 +6,41 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
 }
 
-export const Select: React.FC<SelectProps> = ({
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({
   label,
   error,
   options,
   className = '',
   ...props
-}) => {
+}, ref) => {
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-white mb-2 text-shadow">
           {label}
         </label>
       )}
       <select
-        className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+        ref={ref}
+        className={`select ${error ? 'select-error' : ''} ${className}`}
         {...props}
       >
         {options.map((option) => (
-          <option key={option.value} value={option.value} className="bg-gray-800 text-white">
+          <option key={option.value} value={option.value} className="bg-secondary-800 text-white">
             {option.label}
           </option>
         ))}
       </select>
       {error && (
-        <p className="mt-1 text-sm text-red-400">{error}</p>
+        <motion.p 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-2 text-sm text-danger-400 flex items-center"
+        >
+          <span className="w-1 h-1 bg-danger-400 rounded-full mr-2"></span>
+          {error}
+        </motion.p>
       )}
     </div>
   );
-};
+});

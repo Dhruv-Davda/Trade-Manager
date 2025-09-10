@@ -16,6 +16,10 @@ export const calculateMerchantBalance = (merchantId: string, trades: Trade[]): {
         break;
       case 'sell':
         due += trade.totalAmount;
+        // Reduce due by amount received
+        if (trade.amountReceived) {
+          due -= trade.amountReceived;
+        }
         break;
       case 'settlement':
         if (trade.settlementType === 'cash' || trade.settlementType === 'bank') {
@@ -24,6 +28,19 @@ export const calculateMerchantBalance = (merchantId: string, trades: Trade[]): {
         break;
     }
   });
+
+  // Net-off logic: offset dues and owes against each other
+  if (due > 0 && owe > 0) {
+    if (due >= owe) {
+      // If due amount is greater than or equal to owe amount
+      due = due - owe;  // Reduce due by owe amount
+      owe = 0;          // Set owe to 0
+    } else {
+      // If owe amount is greater than due amount
+      owe = owe - due;  // Reduce owe by due amount
+      due = 0;          // Set due to 0
+    }
+  }
 
   return { due: Math.max(0, due), owe: Math.max(0, owe) };
 };
@@ -37,9 +54,37 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-export const formatWeight = (weight: number, metalType: 'gold' | 'silver'): string => {
+export const formatCurrencyInCR = (amount: number): string => {
+  const numAmount = Number(amount);
+  
+  // Handle very small amounts (less than 1 lakh)
+  if (numAmount < 100000) {
+    const lakhAmount = numAmount / 100000;
+    return `${lakhAmount.toFixed(1)} L`;
+  }
+  
+  // Handle amounts in lakhs (1 lakh to 99 lakhs)
+  if (numAmount < 10000000) {
+    const lakhAmount = numAmount / 100000;
+    return `${lakhAmount.toFixed(1)} L`;
+  }
+  
+  // Handle amounts in crores (1 crore and above)
+  const crAmount = numAmount / 10000000;
+  
+  // For very large amounts, show without decimal
+  if (crAmount >= 100) {
+    return `${crAmount.toFixed(0)} CR`;
+  }
+  
+  // Default case: show in crores with 1 decimal place
+  return `${crAmount.toFixed(1)} CR`;
+};
+
+export const formatWeight = (weight: number | string | undefined, metalType: 'gold' | 'silver'): string => {
   const unit = metalType === 'gold' ? 'g' : 'kg';
-  return `${weight.toFixed(2)} ${unit}`;
+  const numericWeight = Number(weight) || 0;
+  return `${numericWeight.toFixed(2)} ${unit}`;
 };
 
 export const generateId = (): string => {

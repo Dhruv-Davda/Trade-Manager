@@ -20,7 +20,7 @@ export interface Merchant {
 
 export type MetalType = 'gold' | 'silver';
 export type PaymentType = 'cash' | 'bank_transfer';
-export type SettlementType = 'cash' | 'bank' | 'gold' | 'silver';
+export type SettlementType = 'cash' | 'bill';
 export type TradeType = 'buy' | 'sell' | 'transfer' | 'settlement';
 
 export interface Trade {
@@ -33,6 +33,7 @@ export interface Trade {
   pricePerUnit?: number;
   totalAmount: number;
   amountPaid?: number;
+  amountReceived?: number;
   laborCharges?: number;
   paymentType?: PaymentType;
   settlementType?: SettlementType;
@@ -52,6 +53,25 @@ export interface Expense {
   date: Date;
   paymentType: PaymentType;
   createdAt: Date;
+}
+
+export interface Income {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: Date;
+  paymentType: PaymentType;
+  createdAt: Date;
+}
+
+export interface Stock {
+  id: string;
+  metalType: MetalType;
+  quantity: number; // in grams for gold, kg for silver
+  unit: 'grams' | 'kg';
+  lastUpdated: Date;
+  notes?: string;
 }
 
 export interface Analytics {

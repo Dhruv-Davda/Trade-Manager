@@ -109,11 +109,11 @@ export const Expenses: React.FC = () => {
     { value: 'bank_transfer', label: 'Bank Transfer' },
   ];
 
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalExpenses = expenses.reduce((sum, expense) => Number(sum) + Number(expense.amount), 0);
 
   // Group expenses by category
   const expensesByCategory = expenses.reduce((acc, expense) => {
-    acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+    acc[expense.category] = Number((acc[expense.category] || 0)) + Number(expense.amount);
     return acc;
   }, {} as Record<string, number>);
 
@@ -163,7 +163,7 @@ export const Expenses: React.FC = () => {
                     .filter(expense => 
                       new Date(expense.date).getMonth() === new Date().getMonth()
                     )
-                    .reduce((sum, expense) => sum + expense.amount, 0)
+                    .reduce((sum, expense) => Number(sum) + Number(expense.amount), 0)
                 )}
               </p>
             </div>

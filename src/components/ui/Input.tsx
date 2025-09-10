@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -6,34 +7,42 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
 }
 
-export const Input: React.FC<InputProps> = ({
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
   error,
   icon,
   className = '',
   ...props
-}) => {
+}, ref) => {
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-white mb-2 text-shadow">
           {label}
         </label>
       )}
       <div className="relative">
         {icon && (
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <div className="text-gray-400">{icon}</div>
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <div className="text-secondary-400">{icon}</div>
           </div>
         )}
         <input
-          className={`w-full px-3 py-2 ${icon ? 'pl-10' : ''} bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+          ref={ref}
+          className={`input ${icon ? 'pl-12' : ''} ${error ? 'input-error' : ''} ${className}`}
           {...props}
         />
       </div>
       {error && (
-        <p className="mt-1 text-sm text-red-400">{error}</p>
+        <motion.p 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-2 text-sm text-danger-400 flex items-center"
+        >
+          <span className="w-1 h-1 bg-danger-400 rounded-full mr-2"></span>
+          {error}
+        </motion.p>
       )}
     </div>
   );
-};
+});

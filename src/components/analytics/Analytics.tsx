@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar } from 'lucide-react';
 import { 
   BarChart, 
   Bar, 
@@ -18,24 +18,55 @@ import {
 import { Card } from '../ui/Card';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade, Expense } from '../../types';
-import { formatCurrency } from '../../utils/calculations';
-import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths } from 'date-fns';
+import { Trade, Expense, Income } from '../../types';
+import { formatCurrency, formatCurrencyInCR } from '../../utils/calculations';
+import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 
 export const Analytics: React.FC = () => {
   const [trades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
   const [expenses] = useLocalStorage<Expense[]>(STORAGE_KEYS.EXPENSES, []);
+  const [income] = useLocalStorage<Income[]>(STORAGE_KEYS.INCOME, []);
+  const [dateRange, setDateRange] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   const analytics = useMemo(() => {
+    // Filter trades, expenses, and income by date range if specified
+    let filteredTrades = trades;
+    let filteredExpenses = expenses;
+    let filteredIncome = income;
+
+    if (dateRange.startDate && dateRange.endDate) {
+      const startDate = startOfDay(new Date(dateRange.startDate));
+      const endDate = endOfDay(new Date(dateRange.endDate));
+      
+      filteredTrades = trades.filter(trade => 
+        isWithinInterval(new Date(trade.createdAt), { start: startDate, end: endDate })
+      );
+      filteredExpenses = expenses.filter(expense => 
+        isWithinInterval(expense.date, { start: startDate, end: endDate })
+      );
+      filteredIncome = income.filter(incomeItem => 
+        isWithinInterval(incomeItem.date, { start: startDate, end: endDate })
+      );
+    }
+
     // Calculate basic metrics
-    const buyTrades = trades.filter(t => t.type === 'buy');
-    const sellTrades = trades.filter(t => t.type === 'sell');
+    const buyTrades = filteredTrades.filter(t => t.type === 'buy');
+    const sellTrades = filteredTrades.filter(t => t.type === 'sell');
+    const transferTrades = filteredTrades.filter(t => t.type === 'transfer');
     
-    const totalPurchases = buyTrades.reduce((sum, t) => sum + t.totalAmount, 0);
-    const totalSales = sellTrades.reduce((sum, t) => sum + t.totalAmount, 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const grossProfit = totalSales - totalPurchases;
-    const netProfit = grossProfit - totalExpenses;
+    const totalPurchases = buyTrades.reduce((sum, t) => sum + Number(t.totalAmount), 0);
+    const totalSales = sellTrades.reduce((sum, t) => sum + Number(t.totalAmount), 0);
+    const totalTransferCharges = transferTrades.reduce((sum, t) => sum + Number(t.transferCharges || 0), 0);
+    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const totalIncome = filteredIncome.reduce((sum, i) => sum + Number(i.amount), 0);
+    const grossProfit = Number(totalSales) - Number(totalPurchases) + Number(totalTransferCharges);
+    const netProfit = Number(grossProfit) - Number(totalExpenses) + Number(totalIncome);
 
     // Monthly data for the last 12 months
     const last12Months = eachMonthOfInterval({
@@ -47,26 +78,33 @@ export const Analytics: React.FC = () => {
       const monthStart = startOfMonth(month);
       const monthEnd = endOfMonth(month);
       
-      const monthTrades = trades.filter(trade => {
+      const monthTrades = filteredTrades.filter(trade => {
         const tradeDate = new Date(trade.createdAt);
         return tradeDate >= monthStart && tradeDate <= monthEnd;
       });
-
-      const monthExpenses = expenses.filter(expense => {
-        const expenseDate = new Date(expense.date);
-        return expenseDate >= monthStart && expenseDate <= monthEnd;
+      
+      const monthExpenses = filteredExpenses.filter(expense => {
+        return expense.date >= monthStart && expense.date <= monthEnd;
       });
 
-      const sales = monthTrades.filter(t => t.type === 'sell').reduce((sum, t) => sum + t.totalAmount, 0);
-      const purchases = monthTrades.filter(t => t.type === 'buy').reduce((sum, t) => sum + t.totalAmount, 0);
-      const expenseAmount = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const monthIncome = filteredIncome.filter(incomeItem => {
+        return incomeItem.date >= monthStart && incomeItem.date <= monthEnd;
+      });
+
+      const sales = monthTrades.filter(t => t.type === 'sell').reduce((sum, t) => sum + Number(t.totalAmount), 0);
+      const purchases = monthTrades.filter(t => t.type === 'buy').reduce((sum, t) => sum + Number(t.totalAmount), 0);
+      const transferCharges = monthTrades.filter(t => t.type === 'transfer').reduce((sum, t) => sum + Number(t.transferCharges || 0), 0);
+      const expenseAmount = monthExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const incomeAmount = monthIncome.reduce((sum, i) => sum + Number(i.amount), 0);
 
       return {
         month: format(month, 'MMM yyyy'),
         sales,
         purchases,
+        transferCharges,
         expenses: expenseAmount,
-        profit: sales - purchases - expenseAmount,
+        income: incomeAmount,
+        profit: sales - purchases + transferCharges - expenseAmount + incomeAmount,
       };
     });
 
@@ -87,18 +125,27 @@ export const Analytics: React.FC = () => {
       { name: 'Silver', value: silverTrades.length, color: '#6b7280' },
     ];
 
+    // Calculate max value for chart scaling
+    const maxValue = Math.max(
+      ...monthlyData.map(d => Math.max(d.sales, d.purchases, d.transferCharges, d.profit))
+    );
+    
+
     return {
       totalPurchases,
       totalSales,
+      totalTransferCharges,
       totalExpenses,
+      totalIncome,
       grossProfit,
       netProfit,
       monthlyData,
       tradeTypes,
       metalDistribution,
       totalTrades: trades.length,
+      maxValue,
     };
-  }, [trades, expenses]);
+  }, [trades, expenses, income, dateRange]);
 
   const statsCards = [
     {
@@ -133,9 +180,24 @@ export const Analytics: React.FC = () => {
       bgColor: analytics.netProfit >= 0 ? 'bg-green-400/10' : 'bg-red-400/10',
       change: '+10%',
     },
+    {
+      title: 'Other Income',
+      value: analytics.totalIncome,
+      icon: TrendingUp,
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-400/10',
+      change: '+5%',
+    },
+    {
+      title: 'Net Expenses',
+      value: analytics.totalExpenses,
+      icon: TrendingDown,
+      color: 'text-orange-400',
+      bgColor: 'bg-orange-400/10',
+      change: '-5%',
+    },
   ];
 
-  const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'];
 
   return (
     <div className="space-y-6">
@@ -153,8 +215,66 @@ export const Analytics: React.FC = () => {
         </div>
       </motion.div>
 
+      {/* Date Filter */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Calendar className="w-5 h-5 text-primary-400" />
+              <span className="text-white font-medium">Date Range Filter</span>
+              {dateRange.startDate && dateRange.endDate && (
+                <span className="text-sm text-gray-400">
+                  {format(new Date(dateRange.startDate), 'MMM dd, yyyy')} - {format(new Date(dateRange.endDate), 'MMM dd, yyyy')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              {showDateFilter ? (
+                <>
+                  <Input
+                    type="date"
+                    value={dateRange.startDate}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-40"
+                  />
+                  <span className="text-gray-400">to</span>
+                  <Input
+                    type="date"
+                    value={dateRange.endDate}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-40"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDateRange({ startDate: '', endDate: '' });
+                      setShowDateFilter(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDateFilter(true)}
+                >
+                  Filter by Date
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {statsCards.map((stat, index) => (
           <motion.div
             key={stat.title}
@@ -184,18 +304,24 @@ export const Analytics: React.FC = () => {
             <BarChart data={analytics.monthlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => formatCurrencyInCR(value)}
+                domain={[0, Math.max(analytics.maxValue * 1.1, 1000000)]}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
                   border: '1px solid #374151',
                   borderRadius: '8px'
                 }}
-                formatter={(value: number) => [formatCurrency(value)]}
+                formatter={(value: number) => [formatCurrencyInCR(value)]}
               />
               <Bar dataKey="sales" fill="#10b981" name="Sales" />
               <Bar dataKey="purchases" fill="#ef4444" name="Purchases" />
-              <Bar dataKey="profit" fill="#3b82f6" name="Profit" />
+              <Bar dataKey="transferCharges" fill="#8b5cf6" name="Transfer Profit" />
+              <Bar dataKey="profit" fill="#3b82f6" name="Net Profit" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -228,7 +354,7 @@ export const Analytics: React.FC = () => {
             </PieChart>
           </ResponsiveContainer>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            {analytics.tradeTypes.map((type, index) => (
+            {analytics.tradeTypes.map((type) => (
               <div key={type.name} className="flex items-center space-x-2">
                 <div 
                   className="w-3 h-3 rounded-full" 
@@ -247,14 +373,19 @@ export const Analytics: React.FC = () => {
             <LineChart data={analytics.monthlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="month" stroke="#9ca3af" fontSize={12} />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => formatCurrencyInCR(value)}
+                domain={[0, Math.max(analytics.maxValue * 1.1, 1000000)]}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
                   border: '1px solid #374151',
                   borderRadius: '8px'
                 }}
-                formatter={(value: number) => [formatCurrency(value), 'Profit']}
+                formatter={(value: number) => [formatCurrencyInCR(value), 'Profit']}
               />
               <Line 
                 type="monotone" 
@@ -295,7 +426,7 @@ export const Analytics: React.FC = () => {
             </PieChart>
           </ResponsiveContainer>
           <div className="mt-4 space-y-2">
-            {analytics.metalDistribution.map((metal, index) => (
+            {analytics.metalDistribution.map((metal) => (
               <div key={metal.name} className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <div 
