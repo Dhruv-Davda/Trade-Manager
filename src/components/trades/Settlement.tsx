@@ -7,26 +7,64 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
 import { Trade, Merchant, SettlementType } from '../../types';
-import { generateId, formatCurrency } from '../../utils/calculations';
+import { generateId } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+import { MerchantsService } from '../../services/merchantsService';
+import { StockService } from '../../services/stockService';
 
 interface SettlementFormData {
   merchantId: string;
   settlementType: SettlementType;
-  amount: number;
+  settlementDirection: 'receiving' | 'paying';
+  metalType?: 'gold' | 'silver';
   weight?: number;
+  rate?: number;
+  amount: number;
   notes?: string;
 }
 
 export const Settlement: React.FC = () => {
-  const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
-  const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [, setIsLoadingMerchants] = useState(true);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '', olderDues: '' });
+
+  // Load merchants and trades from database
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log('🏪 Settlement: Loading merchants and trades from database...');
+        
+        // Load merchants
+        const { merchants: dbMerchants, error: merchantsError } = await MerchantsService.getMerchants();
+        if (merchantsError) {
+          console.error('❌ Settlement: Error loading merchants:', merchantsError);
+        } else {
+          console.log('✅ Settlement: Loaded', dbMerchants.length, 'merchants from database');
+          setMerchants(dbMerchants);
+        }
+
+        // Load trades
+        const { trades: dbTrades, error: tradesError } = await TradeService.getTrades();
+        if (tradesError) {
+          console.error('❌ Settlement: Error loading trades:', tradesError);
+        } else {
+          console.log('✅ Settlement: Loaded', dbTrades.length, 'trades from database');
+          setTrades(dbTrades);
+        }
+      } catch (error) {
+        console.error('❌ Settlement: Unexpected error loading data:', error);
+      } finally {
+        setIsLoadingMerchants(false);
+      }
+    };
+
+    loadData();
+  }, []);
   
-  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<SettlementFormData>({
+  const { register, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm<SettlementFormData>({
     defaultValues: {
       settlementType: 'cash',
     }
@@ -38,7 +76,33 @@ export const Settlement: React.FC = () => {
 
   const watchedValues = watch();
 
-  const onSubmit = (data: SettlementFormData) => {
+  // Auto-calculate amount based on metal type, weight, and rate
+  const calculateAmount = (metalType: string, weight: number, rate: number) => {
+    if (!metalType || !weight || !rate) return 0;
+    
+    if (metalType === 'silver') {
+      // Silver: weight (kg) * rate
+      return weight * rate;
+    } else if (metalType === 'gold') {
+      // Gold: weight (grams) * rate / 10
+      return (weight * rate) / 10;
+    }
+    return 0;
+  };
+
+  // Watch for changes in settlement type, weight, or rate to auto-calculate amount
+  React.useEffect(() => {
+    const { settlementType, weight, rate } = watchedValues;
+    if ((settlementType === 'gold' || settlementType === 'silver') && weight && rate) {
+      const calculatedAmount = calculateAmount(settlementType, weight, rate);
+      if (calculatedAmount > 0) {
+        // Update the amount field using React Hook Form's setValue
+        setValue('amount', calculatedAmount);
+      }
+    }
+  }, [watchedValues.settlementType, watchedValues.weight, watchedValues.rate, setValue]);
+
+  const onSubmit = async (data: SettlementFormData) => {
     console.log('Form submitted with data:', data);
     const selectedMerchant = merchants.find(m => m.id === data.merchantId);
     if (!selectedMerchant) {
@@ -51,40 +115,85 @@ export const Settlement: React.FC = () => {
       type: 'settlement',
       merchantId: data.merchantId,
       merchantName: selectedMerchant.name,
+      metalType: (data.settlementType === 'gold' || data.settlementType === 'silver') ? data.settlementType : undefined,
+      weight: data.weight,
+      pricePerUnit: data.rate,
       totalAmount: data.amount,
       settlementType: data.settlementType,
-      weight: data.weight,
+      settlementDirection: data.settlementDirection,
       notes: data.notes,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    setTrades([...trades, newTrade]);
-    reset();
+    console.log('Adding new settlement to database:', newTrade);
     
-    alert('Settlement recorded successfully!');
+    try {
+      const { trade: savedTrade, error } = await TradeService.addTrade(newTrade);
+      if (error) {
+        console.error('❌ Error saving settlement:', error);
+        alert('Error saving settlement: ' + error);
+        return;
+      }
+      
+      console.log('✅ Settlement saved successfully:', savedTrade);
+      
+      // Update stock if it's a metal settlement
+      if (data.settlementType === 'gold' || data.settlementType === 'silver') {
+        console.log('📦 Updating stock for metal settlement...');
+        const { error: stockError } = await StockService.calculateAndUpdateStockFromTrades();
+        if (stockError) {
+          console.error('❌ Error updating stock:', stockError);
+          // Don't show error to user as settlement was successful
+        } else {
+          console.log('✅ Stock updated successfully');
+        }
+      }
+      
+      // Update local state for immediate UI update
+      setTrades([...trades, newTrade]);
+      reset();
+      alert('Settlement recorded successfully!');
+    } catch (error) {
+      console.error('❌ Unexpected error saving settlement:', error);
+      alert('Unexpected error saving settlement');
+    }
   };
 
-  const addMerchant = () => {
+  const addMerchant = async () => {
     if (!newMerchant.name.trim()) return;
 
     // Parse older dues - if empty or invalid, default to 0
     const olderDuesAmount = newMerchant.olderDues.trim() === '' ? 0 : Number(newMerchant.olderDues) || 0;
 
-    const merchant: Merchant = {
-      id: generateId(),
+    const merchantData: Omit<Merchant, 'id' | 'createdAt' | 'updatedAt'> = {
       name: newMerchant.name,
       phone: newMerchant.phone,
       email: newMerchant.email,
       totalDue: olderDuesAmount,
       totalOwe: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    setMerchants([...merchants, merchant]);
-    setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
-    setShowAddMerchant(false);
+    console.log('💾 Adding merchant to database:', merchantData);
+    
+    try {
+      const { merchant: savedMerchant, error } = await MerchantsService.addMerchant(merchantData);
+      if (error) {
+        console.error('❌ Error adding merchant:', error);
+        alert('Error adding merchant: ' + error);
+        return;
+      }
+      
+      console.log('✅ Merchant added successfully:', savedMerchant);
+      
+      // Update local state for immediate UI update
+      setMerchants([...merchants, savedMerchant!]);
+      setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
+      setShowAddMerchant(false);
+    } catch (error) {
+      console.error('❌ Unexpected error adding merchant:', error);
+      alert('Unexpected error adding merchant');
+    }
   };
 
   const merchantOptions = [
@@ -103,6 +212,19 @@ export const Settlement: React.FC = () => {
   ];
 
   const isMetalSettlement = watchedValues.settlementType === 'gold' || watchedValues.settlementType === 'silver';
+
+  // Debug logging for button state
+  React.useEffect(() => {
+    console.log('🔍 Settlement Form State:', {
+      merchantId: watchedValues.merchantId,
+      amount: watchedValues.amount,
+      weight: watchedValues.weight,
+      rate: watchedValues.rate,
+      settlementType: watchedValues.settlementType,
+      isMetalSettlement,
+      buttonDisabled: !watchedValues.merchantId || !watchedValues.amount || (isMetalSettlement && (!watchedValues.weight || !watchedValues.rate))
+    });
+  }, [watchedValues, isMetalSettlement]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -147,9 +269,61 @@ export const Settlement: React.FC = () => {
             {...register('settlementType')}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Settlement Direction"
+            options={[
+              { value: 'receiving', label: 'Receiving (You get money/metal)' },
+              { value: 'paying', label: 'Paying (You give money/metal)' }
+            ]}
+            {...register('settlementDirection', { required: 'Please select settlement direction' })}
+            error={errors.settlementDirection?.message}
+          />
+
+          {isMetalSettlement ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label={`Weight (${watchedValues.settlementType === 'gold' ? 'grams' : 'kg'})`}
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  {...register('weight', { 
+                    required: 'Weight is required for metal settlement',
+                    min: { value: 0.01, message: 'Weight must be greater than 0' }
+                  })}
+                  error={errors.weight?.message}
+                />
+
+                <Input
+                  label="Rate (₹ per unit)"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  {...register('rate', { 
+                    required: 'Rate is required for metal settlement',
+                    min: { value: 0.01, message: 'Rate must be greater than 0' }
+                  })}
+                  error={errors.rate?.message}
+                />
+              </div>
+
+              <Input
+                label="Value Amount (Auto-computed)"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                {...register('amount', { 
+                  required: 'Amount is required',
+                  min: { value: 0.01, message: 'Amount must be greater than 0' }
+                })}
+                error={errors.amount?.message}
+                readOnly
+                className="bg-gray-800 text-gray-300"
+              />
+            </>
+          ) : (
             <Input
-              label={isMetalSettlement ? 'Value Amount' : 'Amount'}
+              label="Amount"
               type="number"
               step="0.01"
               placeholder="0.00"
@@ -159,44 +333,6 @@ export const Settlement: React.FC = () => {
               })}
               error={errors.amount?.message}
             />
-            {isMetalSettlement && (
-              <Input
-                label={`Weight (${watchedValues.settlementType === 'gold' ? 'grams' : 'kg'})`}
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                {...register('weight', { 
-                  required: 'Weight is required for metal settlement',
-                  min: { value: 0.01, message: 'Weight must be greater than 0' }
-                })}
-                error={errors.weight?.message}
-              />
-            )}
-          </div>
-
-          {watchedValues.amount > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-gray-700 p-4 rounded-lg space-y-2"
-            >
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Settlement Type:</span>
-                <span className="text-white capitalize">{watchedValues.settlementType}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">Amount:</span>
-                <span className="text-white">{formatCurrency(watchedValues.amount)}</span>
-              </div>
-              {isMetalSettlement && watchedValues.weight && (
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-300">Weight:</span>
-                  <span className="text-white">
-                    {watchedValues.weight} {watchedValues.settlementType === 'gold' ? 'g' : 'kg'}
-                  </span>
-                </div>
-              )}
-            </motion.div>
           )}
 
           <Input
@@ -208,7 +344,7 @@ export const Settlement: React.FC = () => {
           <Button
             type="submit"
             className="w-full"
-            disabled={!watchedValues.merchantId || !watchedValues.amount || (isMetalSettlement && !watchedValues.weight)}
+            disabled={!watchedValues.merchantId || !watchedValues.amount || !watchedValues.settlementDirection || (isMetalSettlement && (!watchedValues.weight || !watchedValues.rate))}
           >
             Record Settlement
           </Button>

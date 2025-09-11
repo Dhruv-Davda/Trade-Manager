@@ -7,10 +7,10 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade, Merchant, MetalType, Stock } from '../../types';
+import { Trade, Merchant, MetalType } from '../../types';
 import { generateId, formatCurrency } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+import { MerchantsService } from '../../services/merchantsService';
 
 interface SellFormData {
   merchantId: string;
@@ -24,11 +24,45 @@ interface SellFormData {
 }
 
 export const Sell: React.FC = () => {
-  const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
-  const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
-  const [stock, setStock] = useLocalStorage<Stock[]>(STORAGE_KEYS.STOCK, []);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  // Stock is now managed by the database through StockService
+  const [, setIsLoadingMerchants] = useState(true);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '', olderDues: '' });
+
+  // Load merchants and trades from database
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log('🏪 Sell: Loading merchants and trades from database...');
+        
+        // Load merchants
+        const { merchants: dbMerchants, error: merchantsError } = await MerchantsService.getMerchants();
+        if (merchantsError) {
+          console.error('❌ Sell: Error loading merchants:', merchantsError);
+        } else {
+          console.log('✅ Sell: Loaded', dbMerchants.length, 'merchants from database');
+          setMerchants(dbMerchants);
+        }
+
+        // Load trades
+        const { trades: dbTrades, error: tradesError } = await TradeService.getTrades();
+        if (tradesError) {
+          console.error('❌ Sell: Error loading trades:', tradesError);
+        } else {
+          console.log('✅ Sell: Loaded', dbTrades.length, 'trades from database');
+          setTrades(dbTrades);
+        }
+      } catch (error) {
+        console.error('❌ Sell: Unexpected error loading data:', error);
+      } finally {
+        setIsLoadingMerchants(false);
+      }
+    };
+
+    loadData();
+  }, []);
   
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<SellFormData>({
     defaultValues: {
@@ -50,7 +84,7 @@ export const Sell: React.FC = () => {
   : Number(watchedValues.weight || 0 )*Number(watchedValues.pricePerUnit || 0);
   const totalAmount = Number(metalValue) + Number(watchedValues.laborCharges || 0);
 
-  const onSubmit = (data: SellFormData) => {
+  const onSubmit = async (data: SellFormData) => {
     console.log('Form submitted with data:', data);
     const selectedMerchant = merchants.find(m => m.id === data.merchantId);
     if (!selectedMerchant) {
@@ -75,48 +109,63 @@ export const Sell: React.FC = () => {
       updatedAt: new Date(),
     };
 
-    console.log('Adding new trade:', newTrade);
-    setTrades([...trades, newTrade]);
-
-    // Update stock levels (reduce stock when selling)
-    const updatedStock = stock.map(stockItem => {
-      if (stockItem.metalType === data.metalType) {
-        const weightInGrams = data.metalType === 'gold' ? data.weight : data.weight * 1000; // Convert kg to grams for silver
-        return {
-          ...stockItem,
-          quantity: Math.max(0, stockItem.quantity - weightInGrams), // Ensure stock doesn't go negative
-          lastUpdated: new Date()
-        };
-      }
-      return stockItem;
-    });
-    setStock(updatedStock);
-
-    reset();
+    console.log('Adding new trade to database:', newTrade);
     
-    alert('Sale recorded successfully! Stock updated.');
+    try {
+      const { trade: savedTrade, error } = await TradeService.addTrade(newTrade);
+      if (error) {
+        console.error('❌ Error saving trade:', error);
+        alert('Error saving trade: ' + error);
+        return;
+      }
+      
+      console.log('✅ Trade saved successfully:', savedTrade);
+      
+      // Update local state for immediate UI update
+      setTrades([...trades, newTrade]);
+
+      reset();
+      alert('Sale recorded successfully! Stock updated.');
+    } catch (error) {
+      console.error('❌ Unexpected error saving trade:', error);
+      alert('Unexpected error saving trade');
+    }
   };
 
-  const addMerchant = () => {
+  const addMerchant = async () => {
     if (!newMerchant.name.trim()) return;
 
     // Parse older dues - if empty or invalid, default to 0
     const olderDuesAmount = newMerchant.olderDues.trim() === '' ? 0 : Number(newMerchant.olderDues) || 0;
 
-    const merchant: Merchant = {
-      id: generateId(),
+    const merchantData: Omit<Merchant, 'id' | 'createdAt' | 'updatedAt'> = {
       name: newMerchant.name,
       phone: newMerchant.phone,
       email: newMerchant.email,
       totalDue: olderDuesAmount,
       totalOwe: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    setMerchants([...merchants, merchant]);
-    setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
-    setShowAddMerchant(false);
+    console.log('💾 Adding merchant to database:', merchantData);
+    
+    try {
+      const { merchant: savedMerchant, error } = await MerchantsService.addMerchant(merchantData);
+      if (error) {
+        console.error('❌ Error adding merchant:', error);
+        alert('Error adding merchant: ' + error);
+        return;
+      }
+      
+      console.log('✅ Merchant added successfully:', savedMerchant);
+      
+      // Update local state for immediate UI update
+      setMerchants([...merchants, savedMerchant!]);
+      setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
+      setShowAddMerchant(false);
+    } catch (error) {
+      console.error('❌ Unexpected error adding merchant:', error);
+      alert('Unexpected error adding merchant');
+    }
   };
 
   const merchantOptions = [

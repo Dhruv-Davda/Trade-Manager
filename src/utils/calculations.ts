@@ -1,4 +1,4 @@
-import { Trade, Merchant } from '../types';
+import { Trade } from '../types';
 
 export const calculateMerchantBalance = (merchantId: string, trades: Trade[]): { due: number; owe: number } => {
   const merchantTrades = trades.filter(trade => trade.merchantId === merchantId);
@@ -23,6 +23,9 @@ export const calculateMerchantBalance = (merchantId: string, trades: Trade[]): {
         break;
       case 'settlement':
         if (trade.settlementType === 'cash' || trade.settlementType === 'bank') {
+          due -= trade.totalAmount;
+        } else if (trade.settlementType === 'gold' || trade.settlementType === 'silver') {
+          // For gold/silver settlements, reduce due by the value amount
           due -= trade.totalAmount;
         }
         break;

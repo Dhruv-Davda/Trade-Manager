@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, Bell, User, LogOut, X } from 'lucide-react';
+import { Menu, User, LogOut, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -102,10 +102,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMenuOpen }) => {
                   <p className="text-sm font-medium text-white">{user?.businessName}</p>
                   <p className="text-xs text-secondary-400">{user?.email}</p>
                 </div>
-                <button className="w-full text-left px-4 py-2 text-sm text-secondary-300 hover:bg-white/5 hover:text-white transition-colors">
-                  Profile Settings
+                <button 
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    navigate('/settings/user');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-secondary-300 hover:bg-white/5 hover:text-white transition-colors"
+                >
+                  User Settings
                 </button>
-                <button className="w-full text-left px-4 py-2 text-sm text-secondary-300 hover:bg-white/5 hover:text-white transition-colors">
+                <button 
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    navigate('/settings/account');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-secondary-300 hover:bg-white/5 hover:text-white transition-colors"
+                >
                   Account Settings
                 </button>
               </motion.div>

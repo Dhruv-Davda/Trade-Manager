@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useForm } from 'react-hook-form';
 import { 
   History, 
   Search, 
@@ -12,22 +13,152 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade } from '../../types';
+import { Modal } from '../ui/Modal';
+import { Trade, TradeType, MetalType } from '../../types';
 import { formatCurrency, formatWeight } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+
+interface EditTradeFormData {
+  type: TradeType;
+  merchantName: string;
+  metalType: MetalType;
+  weight: number;
+  pricePerUnit: number;
+  totalAmount: number;
+  notes?: string;
+}
 
 export const TradeHistory: React.FC = () => {
-  const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string[]>(['all']);
   const [filterMetal, setFilterMetal] = useState('all');
   const [sortBy, setSortBy] = useState('date_desc');
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  // Debug logging
-  console.log('TradeHistory - trades:', trades);
-  console.log('TradeHistory - trades length:', trades?.length);
+  // Form setup for editing
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<EditTradeFormData>();
+
+  // Load trades from database
+  React.useEffect(() => {
+    const loadTrades = async () => {
+      try {
+        console.log('📊 TradeHistory: Loading trades from database...');
+        const { trades: dbTrades, error } = await TradeService.getTrades();
+        if (error) {
+          console.error('❌ TradeHistory: Error loading trades:', error);
+        } else {
+          console.log('✅ TradeHistory: Loaded', dbTrades.length, 'trades from database');
+          setTrades(dbTrades);
+        }
+      } catch (error) {
+        console.error('❌ TradeHistory: Unexpected error loading trades:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTrades();
+  }, []);
+
+  // Handle edit trade
+  const handleEditTrade = (trade: Trade) => {
+    setEditingTrade(trade);
+    setValue('type', trade.type);
+    setValue('merchantName', trade.merchantName);
+    setValue('metalType', trade.metalType || 'gold');
+    setValue('weight', trade.weight || 0);
+    setValue('pricePerUnit', trade.pricePerUnit || 0);
+    setValue('totalAmount', trade.totalAmount);
+    setValue('notes', trade.notes || '');
+    setShowEditModal(true);
+  };
+
+  // Handle update trade
+  const handleUpdateTrade = async (data: EditTradeFormData) => {
+    if (!editingTrade) {
+      console.error('❌ No trade selected for editing');
+      return;
+    }
+
+    console.log('💾 Updating trade in database:', editingTrade.id, data);
+    console.log('💾 Original trade data:', editingTrade);
+    
+    try {
+      const updatePayload = {
+        type: data.type,
+        merchantName: data.merchantName,
+        metalType: data.metalType,
+        weight: data.weight,
+        pricePerUnit: data.pricePerUnit,
+        totalAmount: data.totalAmount,
+        notes: data.notes,
+        updatedAt: new Date(),
+      };
+      
+      console.log('💾 Update payload:', updatePayload);
+      
+      const { trade: updatedTrade, error } = await TradeService.updateTrade(editingTrade.id, updatePayload);
+
+      if (error) {
+        console.error('❌ Error updating trade:', error);
+        alert('Error updating trade: ' + error);
+        return;
+      }
+
+      if (!updatedTrade) {
+        console.error('❌ No updated trade returned from service');
+        alert('No updated trade returned from service');
+        return;
+      }
+
+      console.log('✅ Trade updated successfully:', updatedTrade);
+      
+      // Update local state
+      const updatedTrades = trades.map(trade => 
+        trade.id === editingTrade.id ? updatedTrade : trade
+      );
+      
+      console.log('💾 Updated trades list:', updatedTrades);
+      setTrades(updatedTrades);
+      
+      setShowEditModal(false);
+      setEditingTrade(null);
+      reset();
+      alert('Trade updated successfully!');
+    } catch (error) {
+      console.error('❌ Unexpected error updating trade:', error);
+      alert('Unexpected error updating trade: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // Handle delete trade
+  const handleDeleteTrade = async (tradeId: string) => {
+    if (!window.confirm('Are you sure you want to delete this trade?')) return;
+
+    console.log('🗑️ Deleting trade from database:', tradeId);
+    
+    try {
+      const { error } = await TradeService.deleteTrade(tradeId);
+      if (error) {
+        console.error('❌ Error deleting trade:', error);
+        alert('Error deleting trade: ' + error);
+        return;
+      }
+
+      console.log('✅ Trade deleted successfully');
+      
+      // Update local state
+      setTrades(trades.filter(trade => trade.id !== tradeId));
+      alert('Trade deleted successfully!');
+    } catch (error) {
+      console.error('❌ Unexpected error deleting trade:', error);
+      alert('Unexpected error deleting trade');
+    }
+  };
 
   const filteredAndSortedTrades = useMemo(() => {
     console.log('🔍 Processing trades:', trades);
@@ -130,17 +261,6 @@ export const TradeHistory: React.FC = () => {
     }
   }, [trades, searchTerm, filterType, filterMetal, sortBy]);
 
-  const deleteTrade = (tradeId: string) => {
-    try {
-      if (window.confirm('Are you sure you want to delete this trade?')) {
-        if (Array.isArray(trades)) {
-          setTrades(trades.filter(trade => trade && trade.id !== tradeId));
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting trade:', error);
-    }
-  };
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
@@ -176,14 +296,19 @@ export const TradeHistory: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading trade history...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Test component to verify rendering
-      <div className="p-4 bg-green-500 text-white rounded-lg">
-        <h2 className="text-xl font-bold">✅ Trade History Component is Working!</h2>
-        <p>Trades count: {Array.isArray(trades) ? trades.length : 'Invalid data'}</p>
-        <p>Filtered trades: {filteredAndSortedTrades.length}</p>
-      </div> */}
       
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -342,20 +467,14 @@ export const TradeHistory: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => console.log('Edit trade:', trade.id)}
+                          onClick={() => handleEditTrade(trade)}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            if (trade.id) {
-                              deleteTrade(trade.id);
-                            } else {
-                              console.warn('Cannot delete trade without ID:', trade);
-                            }
-                          }}
+                          onClick={() => handleDeleteTrade(trade.id)}
                           className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -503,6 +622,162 @@ export const TradeHistory: React.FC = () => {
           </motion.div>
         </div>
       )}
+
+      {/* Edit Trade Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingTrade(null);
+          reset();
+        }}
+        title="Edit Trade"
+      >
+        <form onSubmit={handleSubmit(handleUpdateTrade)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Trade Type
+              </label>
+              <Select
+                {...register('type', { required: 'Trade type is required' })}
+                className="w-full"
+                options={[
+                  { value: 'buy', label: 'Buy' },
+                  { value: 'sell', label: 'Sell' },
+                  { value: 'transfer', label: 'Transfer' },
+                  { value: 'settlement', label: 'Settlement' }
+                ]}
+              />
+              {errors.type && (
+                <p className="text-red-400 text-sm mt-1">{errors.type.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Metal Type
+              </label>
+              <Select
+                {...register('metalType', { required: 'Metal type is required' })}
+                className="w-full"
+                options={[
+                  { value: 'gold', label: 'Gold' },
+                  { value: 'silver', label: 'Silver' }
+                ]}
+              />
+              {errors.metalType && (
+                <p className="text-red-400 text-sm mt-1">{errors.metalType.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Merchant/Customer Name
+            </label>
+            <Input
+              {...register('merchantName', { required: 'Merchant name is required' })}
+              placeholder="Enter merchant name"
+              className="w-full"
+            />
+            {errors.merchantName && (
+              <p className="text-red-400 text-sm mt-1">{errors.merchantName.message}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Weight (grams)
+              </label>
+              <Input
+                {...register('weight', { 
+                  required: 'Weight is required',
+                  min: { value: 0, message: 'Weight must be positive' }
+                })}
+                type="number"
+                step="0.001"
+                placeholder="0.000"
+                className="w-full"
+              />
+              {errors.weight && (
+                <p className="text-red-400 text-sm mt-1">{errors.weight.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Price per Unit (₹)
+              </label>
+              <Input
+                {...register('pricePerUnit', { 
+                  required: 'Price per unit is required',
+                  min: { value: 0, message: 'Price must be positive' }
+                })}
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                className="w-full"
+              />
+              {errors.pricePerUnit && (
+                <p className="text-red-400 text-sm mt-1">{errors.pricePerUnit.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Total Amount (₹)
+              </label>
+              <Input
+                {...register('totalAmount', { 
+                  required: 'Total amount is required',
+                  min: { value: 0, message: 'Amount must be positive' }
+                })}
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                className="w-full"
+              />
+              {errors.totalAmount && (
+                <p className="text-red-400 text-sm mt-1">{errors.totalAmount.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Notes (Optional)
+            </label>
+            <Input
+              {...register('notes')}
+              placeholder="Enter any additional notes"
+              className="w-full"
+            />
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowEditModal(false);
+                setEditingTrade(null);
+                reset();
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+            >
+              Update Trade
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

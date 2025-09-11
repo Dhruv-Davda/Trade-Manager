@@ -20,7 +20,7 @@ export interface Merchant {
 
 export type MetalType = 'gold' | 'silver';
 export type PaymentType = 'cash' | 'bank_transfer';
-export type SettlementType = 'cash' | 'bill';
+export type SettlementType = 'cash' | 'bank' | 'gold' | 'silver';
 export type TradeType = 'buy' | 'sell' | 'transfer' | 'settlement';
 
 export interface Trade {
@@ -37,6 +37,7 @@ export interface Trade {
   laborCharges?: number;
   paymentType?: PaymentType;
   settlementType?: SettlementType;
+  settlementDirection?: 'receiving' | 'paying';
   pickupLocation?: string;
   dropLocation?: string;
   transferCharges?: number;

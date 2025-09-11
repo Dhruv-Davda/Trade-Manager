@@ -13,6 +13,9 @@ import { Analytics } from './components/analytics/Analytics';
 import { Expenses } from './components/expenses/Expenses';
 import { IncomeManagement } from './components/income/Income';
 import { Merchants } from './components/merchants/Merchants';
+import { DataMigration } from './components/migration/DataMigration';
+import { UserSettings } from './components/settings/UserSettings';
+import { AccountSettings } from './components/settings/AccountSettings';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,6 +60,9 @@ const AppContent: React.FC = () => {
           <Route path="expenses" element={<Expenses />} />
           <Route path="income" element={<IncomeManagement />} />
           <Route path="merchants" element={<Merchants />} />
+          <Route path="migration" element={<DataMigration />} />
+          <Route path="settings/user" element={<UserSettings />} />
+          <Route path="settings/account" element={<AccountSettings />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

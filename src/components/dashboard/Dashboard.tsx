@@ -13,64 +13,74 @@ import {
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade, Stock } from '../../types';
 import { formatCurrency } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+import { StockService } from '../../services/stockService';
+import { useDataCache } from '../../hooks/useDataCache';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [trades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
-  const [stock, setStock] = useLocalStorage<Stock[]>(STORAGE_KEYS.STOCK, []);
+  const [stock, setStock] = React.useState<{ gold: number; silver: number }>({ gold: 0, silver: 0 });
 
-  // Initialize default stock if empty
+  // Use cached data loading for trades
+  const { 
+    data: trades = [], 
+    isLoading: tradesLoading
+  } = useDataCache(
+    'dashboard_trades',
+    async () => {
+      const { trades: dbTrades, error } = await TradeService.getTrades();
+      if (error) throw new Error(error);
+      return dbTrades;
+    },
+    { expiresIn: 2 * 60 * 1000 } // 2 minutes cache
+  );
+
+  // Load stock data
   React.useEffect(() => {
-    if (stock.length === 0) {
-      const defaultStock: Stock[] = [
-        {
-          id: 'gold-stock',
-          metalType: 'gold',
-          quantity: 0,
-          unit: 'grams',
-          lastUpdated: new Date(),
-          notes: 'Initial gold stock'
-        },
-        {
-          id: 'silver-stock',
-          metalType: 'silver',
-          quantity: 0,
-          unit: 'grams', // Store in grams internally, display as kg
-          lastUpdated: new Date(),
-          notes: 'Initial silver stock'
+    const loadStock = async () => {
+      try {
+        const { stock: dbStock, error: stockError } = await StockService.calculateAndUpdateStockFromTrades();
+        if (stockError) {
+          console.error('❌ Dashboard: Error calculating stock:', stockError);
+        } else {
+          // Convert stock array to object for easier access
+          const stockObj = { gold: 0, silver: 0 };
+          dbStock.forEach(stockItem => {
+            if (stockItem.metalType === 'gold') {
+              stockObj.gold = stockItem.quantity;
+            } else if (stockItem.metalType === 'silver') {
+              stockObj.silver = stockItem.quantity;
+            }
+          });
+          setStock(stockObj);
         }
-      ];
-      setStock(defaultStock);
-    }
-  }, [stock.length, setStock]);
+      } catch (error) {
+        console.error('❌ Dashboard: Error loading stock:', error);
+      }
+    };
+
+    loadStock();
+  }, [trades]); // Reload stock when trades change
 
 
   // Calculate dashboard statistics
   const stats = React.useMemo(() => {
-    const totalTrades = trades.length;
+    const totalTrades = trades?.length || 0;
     const totalRevenue = trades
-      .filter(trade => trade.type === 'sell')
-      .reduce((sum, trade) => Number(sum) + Number(trade.totalAmount), 0);
+      ?.filter(trade => trade.type === 'sell')
+      .reduce((sum, trade) => Number(sum) + Number(trade.totalAmount || 0), 0) || 0;
     
     const totalPurchases = trades
-      .filter(trade => trade.type === 'buy')
-      .reduce((sum, trade) => Number(sum) + Number(trade.totalAmount), 0);
-
-    // Get current stock levels
-    const goldStock = stock.find(s => s.metalType === 'gold');
-    const silverStock = stock.find(s => s.metalType === 'silver');
-
+      ?.filter(trade => trade.type === 'buy')
+      .reduce((sum, trade) => Number(sum) + Number(trade.totalAmount || 0), 0) || 0;
 
     return {
       totalTrades,
       totalRevenue,
       totalPurchases,
-      goldStock: goldStock?.quantity || 0, // Already in grams
-      silverStock: silverStock ? (silverStock.quantity / 1000) : 0, // Convert grams to kg for display
+      goldStock: stock.gold, // Already in grams
+      silverStock: stock.silver / 1000, // Convert grams to kg for display
     };
   }, [trades, stock]);
 
@@ -138,6 +148,17 @@ export const Dashboard: React.FC = () => {
     },
   ];
 
+  if (tradesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <motion.div 
@@ -174,7 +195,11 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <p className="text-sm text-secondary-400 mb-2 font-medium">{stat.title}</p>
-                  <p className="text-2xl font-bold text-white text-shadow">
+                  <p className={`text-2xl font-bold text-shadow ${
+                    (stat.title === 'Gold Stock' || stat.title === 'Silver Stock') && stat.value < 0 
+                      ? 'text-red-400' 
+                      : 'text-white'
+                  }`}>
                     {stat.unit ? `${stat.value} ${stat.unit}` : formatCurrency(stat.value)}
                   </p>
                 </div>
@@ -249,7 +274,7 @@ export const Dashboard: React.FC = () => {
           <p className="text-secondary-400 mt-1">Your latest trading activity</p>
         </div>
         <Card className="p-6">
-          {trades.length > 0 ? (
+          {trades && trades.length > 0 ? (
             <div className="space-y-4">
               {trades.slice(-5).reverse().map((trade, index) => (
                 <motion.div

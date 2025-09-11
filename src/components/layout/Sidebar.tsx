@@ -1,8 +1,5 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
-import { Stock } from '../../types';
 import { 
   Home, 
   ShoppingCart, 
@@ -14,7 +11,8 @@ import {
   Coins,
   Package,
   Scale,
-  DollarSign
+  DollarSign,
+  Database
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -29,6 +27,7 @@ const navigation = [
   { name: 'Expenses', href: '/expenses', icon: Receipt },
   { name: 'Income', href: '/income', icon: DollarSign },
   { name: 'Merchants', href: '/merchants', icon: Users },
+  { name: 'Data Migration', href: '/migration', icon: Database },
 ];
 
 interface SidebarProps {
@@ -38,7 +37,7 @@ interface SidebarProps {
 
 // Sidebar component with mobile support
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose }) => {
-  const [stock] = useLocalStorage<Stock[]>(STORAGE_KEYS.STOCK, []);
+  // Stock is now managed by the database through StockService
   return (
     <div className={`fixed inset-y-0 left-0 z-40 w-64 glass-dark border-r border-white/10 transform transition-all duration-300 ease-in-out ${
       isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -134,8 +133,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                     <p className="text-sm font-medium text-white capitalize">
                       {item.metalType}
                     </p>
-                    <p className="text-xs text-secondary-400">
+                    <p className={`text-xs ${item.quantity < 0 ? 'text-red-400' : 'text-secondary-400'}`}>
                       {item.metalType === 'gold' ? item.quantity : (item.quantity / 1000).toFixed(2)} {item.metalType === 'gold' ? 'gms' : 'kg'}
+                      {item.quantity < 0 && ' ⚠️'}
                     </p>
                   </div>
                 </div>

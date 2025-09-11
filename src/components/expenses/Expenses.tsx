@@ -8,10 +8,9 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
 import { Expense, PaymentType } from '../../types';
-import { generateId, formatCurrency } from '../../utils/calculations';
+import { formatCurrency } from '../../utils/calculations';
+import { ExpensesService } from '../../services/expensesService';
 
 interface ExpenseFormData {
   category: string;
@@ -37,9 +36,32 @@ const EXPENSE_CATEGORIES = [
 ];
 
 export const Expenses: React.FC = () => {
-  const [expenses, setExpenses] = useLocalStorage<Expense[]>(STORAGE_KEYS.EXPENSES, []);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  // Load expenses from database
+  React.useEffect(() => {
+    const loadExpenses = async () => {
+      try {
+        console.log('💸 Expenses: Loading expenses from database...');
+        const { expenses: dbExpenses, error } = await ExpensesService.getExpenses();
+        if (error) {
+          console.error('❌ Expenses: Error loading expenses:', error);
+        } else {
+          console.log('✅ Expenses: Loaded', dbExpenses.length, 'expense records from database');
+          setExpenses(dbExpenses);
+        }
+      } catch (error) {
+        console.error('❌ Expenses: Unexpected error loading expenses:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadExpenses();
+  }, []);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ExpenseFormData>({
     defaultValues: {
@@ -48,38 +70,90 @@ export const Expenses: React.FC = () => {
     }
   });
 
-  const onSubmit = (data: ExpenseFormData) => {
+  const onSubmit = async (data: ExpenseFormData) => {
     if (editingExpense) {
       // Update existing expense
-      const updatedExpenses = expenses.map(expense =>
-        expense.id === editingExpense.id
-          ? {
-              ...expense,
-              ...data,
-              date: new Date(data.date),
-            }
-          : expense
-      );
-      setExpenses(updatedExpenses);
-      setEditingExpense(null);
-    } else {
-      // Add new expense
-      const newExpense: Expense = {
-        id: generateId(),
+      const updatedExpenseData: Expense = {
+        ...editingExpense,
         ...data,
         date: new Date(data.date),
-        createdAt: new Date(),
       };
-      setExpenses([...expenses, newExpense]);
+
+      console.log('📝 Updating expense in database:', updatedExpenseData);
+      
+      try {
+        const { expense: savedExpense, error } = await ExpensesService.updateExpense(updatedExpenseData);
+        if (error) {
+          console.error('❌ Error updating expense:', error);
+          alert('Error updating expense: ' + error);
+          return;
+        }
+        
+        console.log('✅ Expense updated successfully:', savedExpense);
+        
+        // Update local state for immediate UI update
+        const updatedExpenses = expenses.map(expense =>
+          expense.id === editingExpense.id ? savedExpense! : expense
+        );
+        setExpenses(updatedExpenses);
+        setEditingExpense(null);
+      } catch (error) {
+        console.error('❌ Unexpected error updating expense:', error);
+        alert('Unexpected error updating expense');
+        return;
+      }
+    } else {
+      // Add new expense
+      const newExpenseData: Omit<Expense, 'id' | 'createdAt'> = {
+        ...data,
+        date: new Date(data.date),
+      };
+
+      console.log('💾 Adding expense to database:', newExpenseData);
+      
+      try {
+        const { expense: savedExpense, error } = await ExpensesService.addExpense(newExpenseData);
+        if (error) {
+          console.error('❌ Error adding expense:', error);
+          alert('Error adding expense: ' + error);
+          return;
+        }
+        
+        console.log('✅ Expense added successfully:', savedExpense);
+        
+        // Update local state for immediate UI update
+        setExpenses([...expenses, savedExpense!]);
+      } catch (error) {
+        console.error('❌ Unexpected error adding expense:', error);
+        alert('Unexpected error adding expense');
+        return;
+      }
     }
     
     reset();
     setShowAddModal(false);
   };
 
-  const deleteExpense = (expenseId: string) => {
+  const deleteExpense = async (expenseId: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
-      setExpenses(expenses.filter(expense => expense.id !== expenseId));
+      console.log('🗑️ Deleting expense from database:', expenseId);
+      
+      try {
+        const { error } = await ExpensesService.deleteExpense(expenseId);
+        if (error) {
+          console.error('❌ Error deleting expense:', error);
+          alert('Error deleting expense: ' + error);
+          return;
+        }
+        
+        console.log('✅ Expense deleted successfully');
+        
+        // Update local state for immediate UI update
+        setExpenses(expenses.filter(expense => expense.id !== expenseId));
+      } catch (error) {
+        console.error('❌ Unexpected error deleting expense:', error);
+        alert('Unexpected error deleting expense');
+      }
     }
   };
 
@@ -116,6 +190,17 @@ export const Expenses: React.FC = () => {
     acc[expense.category] = Number((acc[expense.category] || 0)) + Number(expense.amount);
     return acc;
   }, {} as Record<string, number>);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading expenses...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

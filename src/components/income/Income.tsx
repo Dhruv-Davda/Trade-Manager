@@ -8,10 +8,9 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
 import { Income, PaymentType } from '../../types';
-import { generateId, formatCurrency } from '../../utils/calculations';
+import { formatCurrency } from '../../utils/calculations';
+import { IncomeService } from '../../services/incomeService';
 
 interface IncomeFormData {
   category: string;
@@ -35,9 +34,32 @@ const INCOME_CATEGORIES = [
 ];
 
 export const IncomeManagement: React.FC = () => {
-  const [income, setIncome] = useLocalStorage<Income[]>(STORAGE_KEYS.INCOME, []);
+  const [income, setIncome] = useState<Income[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
+
+  // Load income from database
+  React.useEffect(() => {
+    const loadIncome = async () => {
+      try {
+        console.log('💰 Income: Loading income from database...');
+        const { income: dbIncome, error } = await IncomeService.getIncome();
+        if (error) {
+          console.error('❌ Income: Error loading income:', error);
+        } else {
+          console.log('✅ Income: Loaded', dbIncome.length, 'income records from database');
+          setIncome(dbIncome);
+        }
+      } catch (error) {
+        console.error('❌ Income: Unexpected error loading income:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadIncome();
+  }, []);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<IncomeFormData>({
     defaultValues: {
@@ -46,35 +68,70 @@ export const IncomeManagement: React.FC = () => {
     }
   });
 
-  const onSubmit = (data: IncomeFormData) => {
+  const onSubmit = async (data: IncomeFormData) => {
     if (editingIncome) {
       // Update existing income
-      const updatedIncome = income.map(exp => 
-        exp.id === editingIncome.id 
-          ? {
-              ...exp,
-              category: data.category,
-              description: data.description,
-              amount: data.amount,
-              date: new Date(data.date),
-              paymentType: data.paymentType,
-            }
-          : exp
-      );
-      setIncome(updatedIncome);
-      setEditingIncome(null);
-    } else {
-      // Add new income
-      const newIncome: Income = {
-        id: generateId(),
+      const updatedIncomeData: Income = {
+        ...editingIncome,
         category: data.category,
         description: data.description,
         amount: data.amount,
         date: new Date(data.date),
         paymentType: data.paymentType,
-        createdAt: new Date(),
       };
-      setIncome([...income, newIncome]);
+
+      console.log('📝 Updating income in database:', updatedIncomeData);
+      
+      try {
+        const { income: savedIncome, error } = await IncomeService.updateIncome(updatedIncomeData);
+        if (error) {
+          console.error('❌ Error updating income:', error);
+          alert('Error updating income: ' + error);
+          return;
+        }
+        
+        console.log('✅ Income updated successfully:', savedIncome);
+        
+        // Update local state for immediate UI update
+        const updatedIncome = income.map(exp => 
+          exp.id === editingIncome.id ? savedIncome! : exp
+        );
+        setIncome(updatedIncome);
+        setEditingIncome(null);
+      } catch (error) {
+        console.error('❌ Unexpected error updating income:', error);
+        alert('Unexpected error updating income');
+        return;
+      }
+    } else {
+      // Add new income
+      const newIncomeData: Omit<Income, 'id' | 'createdAt'> = {
+        category: data.category,
+        description: data.description,
+        amount: data.amount,
+        date: new Date(data.date),
+        paymentType: data.paymentType,
+      };
+
+      console.log('💾 Adding income to database:', newIncomeData);
+      
+      try {
+        const { income: savedIncome, error } = await IncomeService.addIncome(newIncomeData);
+        if (error) {
+          console.error('❌ Error adding income:', error);
+          alert('Error adding income: ' + error);
+          return;
+        }
+        
+        console.log('✅ Income added successfully:', savedIncome);
+        
+        // Update local state for immediate UI update
+        setIncome([...income, savedIncome!]);
+      } catch (error) {
+        console.error('❌ Unexpected error adding income:', error);
+        alert('Unexpected error adding income');
+        return;
+      }
     }
     
     reset();
@@ -91,9 +148,26 @@ export const IncomeManagement: React.FC = () => {
     setShowAddModal(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this income entry?')) {
-      setIncome(income.filter(exp => exp.id !== id));
+      console.log('🗑️ Deleting income from database:', id);
+      
+      try {
+        const { error } = await IncomeService.deleteIncome(id);
+        if (error) {
+          console.error('❌ Error deleting income:', error);
+          alert('Error deleting income: ' + error);
+          return;
+        }
+        
+        console.log('✅ Income deleted successfully');
+        
+        // Update local state for immediate UI update
+        setIncome(income.filter(exp => exp.id !== id));
+      } catch (error) {
+        console.error('❌ Unexpected error deleting income:', error);
+        alert('Unexpected error deleting income');
+      }
     }
   };
 
@@ -114,6 +188,17 @@ export const IncomeManagement: React.FC = () => {
     { value: 'cash', label: 'Cash' },
     { value: 'bank_transfer', label: 'Bank Transfer' },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading income...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

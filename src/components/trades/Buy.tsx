@@ -7,10 +7,10 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
-import { Trade, Merchant, MetalType, SettlementType, Stock } from '../../types';
+import { Trade, Merchant, MetalType, SettlementType } from '../../types';
 import { generateId, formatCurrency } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+import { MerchantsService } from '../../services/merchantsService';
 
 interface BuyFormData {
   merchantId: string;
@@ -23,11 +23,45 @@ interface BuyFormData {
 }
 
 export const Buy: React.FC = () => {
-  const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
-  const [trades, setTrades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
-  const [stock, setStock] = useLocalStorage<Stock[]>(STORAGE_KEYS.STOCK, []);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  // Stock is now managed by the database through StockService
+  const [isLoadingMerchants, setIsLoadingMerchants] = useState(true);
   const [showAddMerchant, setShowAddMerchant] = useState(false);
   const [newMerchant, setNewMerchant] = useState({ name: '', phone: '', email: '', olderDues: '' });
+
+  // Load merchants and trades from database
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log('🏪 Buy: Loading merchants and trades from database...');
+        
+        // Load merchants
+        const { merchants: dbMerchants, error: merchantsError } = await MerchantsService.getMerchants();
+        if (merchantsError) {
+          console.error('❌ Buy: Error loading merchants:', merchantsError);
+        } else {
+          console.log('✅ Buy: Loaded', dbMerchants.length, 'merchants from database');
+          setMerchants(dbMerchants);
+        }
+
+        // Load trades
+        const { trades: dbTrades, error: tradesError } = await TradeService.getTrades();
+        if (tradesError) {
+          console.error('❌ Buy: Error loading trades:', tradesError);
+        } else {
+          console.log('✅ Buy: Loaded', dbTrades.length, 'trades from database');
+          setTrades(dbTrades);
+        }
+      } catch (error) {
+        console.error('❌ Buy: Unexpected error loading data:', error);
+      } finally {
+        setIsLoadingMerchants(false);
+      }
+    };
+
+    loadData();
+  }, []);
   
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<BuyFormData>({
     defaultValues: {
@@ -48,7 +82,7 @@ export const Buy: React.FC = () => {
   : Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0);
   const remainingAmount = Number(totalAmount )- Number(watchedValues.amountPaid || 0);
 
-  const onSubmit = (data: BuyFormData) => {
+  const onSubmit = async (data: BuyFormData) => {
     console.log('Form submitted with data:', data);
     const selectedMerchant = merchants.find(m => m.id === data.merchantId);
     if (!selectedMerchant) {
@@ -72,52 +106,63 @@ export const Buy: React.FC = () => {
       updatedAt: new Date(),
     };
 
-    console.log('Adding new trade:', newTrade);
-    setTrades([...trades, newTrade]);
-
-    // Update stock levels
-    const updatedStock = stock.map(stockItem => {
-      if (stockItem.metalType === data.metalType) {
-        const weightInGrams = data.metalType === 'gold' ? Number(data.weight) : Number(data.weight * 1000); // Convert kg to grams for silver
-        const newQuantity = Number(stockItem.quantity) + Number(weightInGrams);
-        
-        
-        return {
-          ...stockItem,
-          quantity: newQuantity,
-          lastUpdated: new Date()
-        };
-      }
-      return stockItem;
-    });
-    setStock(updatedStock);
-
-    reset();
+    console.log('Adding new trade to database:', newTrade);
     
-    // Show success message (in real app, use toast)
-    alert('Purchase recorded successfully! Stock updated.');
+    try {
+      const { trade: savedTrade, error } = await TradeService.addTrade(newTrade);
+      if (error) {
+        console.error('❌ Error saving trade:', error);
+        alert('Error saving trade: ' + error);
+        return;
+      }
+      
+      console.log('✅ Trade saved successfully:', savedTrade);
+      
+      // Update local state for immediate UI update
+      setTrades([...trades, newTrade]);
+
+      reset();
+      alert('Purchase recorded successfully! Stock updated.');
+    } catch (error) {
+      console.error('❌ Unexpected error saving trade:', error);
+      alert('Unexpected error saving trade');
+    }
   };
 
-  const addMerchant = () => {
+  const addMerchant = async () => {
     if (!newMerchant.name.trim()) return;
 
     // Parse older dues - if empty or invalid, default to 0
     const olderDuesAmount = newMerchant.olderDues.trim() === '' ? 0 : Number(newMerchant.olderDues) || 0;
 
-    const merchant: Merchant = {
-      id: generateId(),
+    const merchantData: Omit<Merchant, 'id' | 'createdAt' | 'updatedAt'> = {
       name: newMerchant.name,
       phone: newMerchant.phone,
       email: newMerchant.email,
       totalDue: olderDuesAmount,
       totalOwe: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     };
 
-    setMerchants([...merchants, merchant]);
-    setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
-    setShowAddMerchant(false);
+    console.log('💾 Adding merchant to database:', merchantData);
+    
+    try {
+      const { merchant: savedMerchant, error } = await MerchantsService.addMerchant(merchantData);
+      if (error) {
+        console.error('❌ Error adding merchant:', error);
+        alert('Error adding merchant: ' + error);
+        return;
+      }
+      
+      console.log('✅ Merchant added successfully:', savedMerchant);
+      
+      // Update local state for immediate UI update
+      setMerchants([...merchants, savedMerchant!]);
+      setNewMerchant({ name: '', phone: '', email: '', olderDues: '' });
+      setShowAddMerchant(false);
+    } catch (error) {
+      console.error('❌ Unexpected error adding merchant:', error);
+      alert('Unexpected error adding merchant');
+    }
   };
 
   const merchantOptions = [
@@ -137,6 +182,17 @@ export const Buy: React.FC = () => {
     { value: 'cash', label: 'Cash' },
     { value: 'bill', label: 'Bill' },
   ];
+
+  if (isLoadingMerchants) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading merchants...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

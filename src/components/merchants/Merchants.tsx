@@ -1,20 +1,66 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Plus, Edit, Trash2, Phone, Mail, MapPin } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Phone, Mail, MapPin, RefreshCw } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
 import { Merchant, Trade } from '../../types';
 import { generateId, formatCurrency, calculateMerchantBalance } from '../../utils/calculations';
+import { TradeService } from '../../services/tradeService';
+import { MerchantsService } from '../../services/merchantsService';
 
 export const Merchants: React.FC = () => {
-  const [merchants, setMerchants] = useLocalStorage<Merchant[]>(STORAGE_KEYS.MERCHANTS, []);
-  const [trades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
+
+  // Load merchants and trades from database
+  const loadAllData = async () => {
+    try {
+      console.log('📊 Merchants: Loading merchants and trades from database...');
+      
+      // Load merchants
+      const { merchants: dbMerchants, error: merchantsError } = await MerchantsService.getMerchants();
+      if (merchantsError) {
+        console.error('❌ Merchants: Error loading merchants:', merchantsError);
+      } else {
+        console.log('✅ Merchants: Loaded', dbMerchants.length, 'merchants from database');
+        setMerchants(dbMerchants);
+      }
+
+      // Load trades
+      const { trades: dbTrades, error: tradesError } = await TradeService.getTrades();
+      if (tradesError) {
+        console.error('❌ Merchants: Error loading trades:', tradesError);
+      } else {
+        console.log('✅ Merchants: Loaded', dbTrades.length, 'trades from database');
+        console.log('🔍 Merchants: Sample trades:', dbTrades.slice(0, 3));
+        setTrades(dbTrades);
+      }
+    } catch (error) {
+      console.error('❌ Merchants: Unexpected error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadAllData();
+  }, []);
+
+  // Refresh data when page comes into focus
+  React.useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 Merchants: Page focused, refreshing data...');
+      loadAllData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,29 +68,67 @@ export const Merchants: React.FC = () => {
     address: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editingMerchant) {
       // Update existing merchant
-      const updatedMerchants = merchants.map(merchant =>
-        merchant.id === editingMerchant.id
-          ? { ...merchant, ...formData, updatedAt: new Date() }
-          : merchant
-      );
-      setMerchants(updatedMerchants);
-      setEditingMerchant(null);
+      const updatedMerchantData: Merchant = {
+        ...editingMerchant,
+        ...formData,
+        updatedAt: new Date(),
+      };
+
+      console.log('📝 Updating merchant in database:', updatedMerchantData);
+      
+      try {
+        const { merchant: savedMerchant, error } = await MerchantsService.updateMerchant(updatedMerchantData);
+        if (error) {
+          console.error('❌ Error updating merchant:', error);
+          alert('Error updating merchant: ' + error);
+          return;
+        }
+        
+        console.log('✅ Merchant updated successfully:', savedMerchant);
+        
+        // Update local state for immediate UI update
+        const updatedMerchants = merchants.map(merchant =>
+          merchant.id === editingMerchant.id ? savedMerchant! : merchant
+        );
+        setMerchants(updatedMerchants);
+        setEditingMerchant(null);
+      } catch (error) {
+        console.error('❌ Unexpected error updating merchant:', error);
+        alert('Unexpected error updating merchant');
+        return;
+      }
     } else {
       // Add new merchant
-      const newMerchant: Merchant = {
-        id: generateId(),
+      const newMerchantData: Omit<Merchant, 'id' | 'createdAt' | 'updatedAt'> = {
         ...formData,
         totalDue: 0,
         totalOwe: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       };
-      setMerchants([...merchants, newMerchant]);
+
+      console.log('💾 Adding merchant to database:', newMerchantData);
+      
+      try {
+        const { merchant: savedMerchant, error } = await MerchantsService.addMerchant(newMerchantData);
+        if (error) {
+          console.error('❌ Error adding merchant:', error);
+          alert('Error adding merchant: ' + error);
+          return;
+        }
+        
+        console.log('✅ Merchant added successfully:', savedMerchant);
+        
+        // Update local state for immediate UI update
+        setMerchants([...merchants, savedMerchant!]);
+      } catch (error) {
+        console.error('❌ Unexpected error adding merchant:', error);
+        alert('Unexpected error adding merchant');
+        return;
+      }
     }
     
     resetForm();
@@ -67,7 +151,7 @@ export const Merchants: React.FC = () => {
     setShowAddModal(true);
   };
 
-  const deleteMerchant = (merchantId: string) => {
+  const deleteMerchant = async (merchantId: string) => {
     const merchantTrades = trades.filter(trade => trade.merchantId === merchantId);
     
     if (merchantTrades.length > 0) {
@@ -76,7 +160,24 @@ export const Merchants: React.FC = () => {
     }
 
     if (window.confirm('Are you sure you want to delete this merchant?')) {
-      setMerchants(merchants.filter(merchant => merchant.id !== merchantId));
+      console.log('🗑️ Deleting merchant from database:', merchantId);
+      
+      try {
+        const { success, error } = await MerchantsService.deleteMerchant(merchantId);
+        if (error) {
+          console.error('❌ Error deleting merchant:', error);
+          alert('Error deleting merchant: ' + error);
+          return;
+        }
+        
+        console.log('✅ Merchant deleted successfully');
+        
+        // Update local state for immediate UI update
+        setMerchants(merchants.filter(merchant => merchant.id !== merchantId));
+      } catch (error) {
+        console.error('❌ Unexpected error deleting merchant:', error);
+        alert('Unexpected error deleting merchant');
+      }
     }
   };
 
@@ -86,6 +187,17 @@ export const Merchants: React.FC = () => {
       [e.target.name]: e.target.value,
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading merchants...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -103,10 +215,16 @@ export const Merchants: React.FC = () => {
             <p className="text-gray-400">Manage your business partners</p>
           </div>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Merchant
-        </Button>
+        <div className="flex space-x-2">
+          <Button onClick={loadAllData} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Merchant
+          </Button>
+        </div>
       </motion.div>
 
       {/* Summary */}
@@ -168,6 +286,14 @@ export const Merchants: React.FC = () => {
           {merchants.map((merchant, index) => {
             const balance = calculateMerchantBalance(merchant.id, trades);
             const merchantTradeCount = trades.filter(trade => trade.merchantId === merchant.id).length;
+            
+            // Debug logging for first merchant
+            if (index === 0) {
+              console.log('🔍 Merchants: Debug for merchant:', merchant.name);
+              console.log('🔍 Merchants: Merchant ID:', merchant.id);
+              console.log('🔍 Merchants: Trades for this merchant:', trades.filter(trade => trade.merchantId === merchant.id));
+              console.log('🔍 Merchants: Calculated balance:', balance);
+            }
             
             return (
               <motion.div

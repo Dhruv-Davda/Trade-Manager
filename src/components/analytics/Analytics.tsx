@@ -16,18 +16,62 @@ import {
   Line
 } from 'recharts';
 import { Card } from '../ui/Card';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { STORAGE_KEYS } from '../../utils/storage';
 import { Trade, Expense, Income } from '../../types';
+import { TradeService } from '../../services/tradeService';
+import { IncomeService } from '../../services/incomeService';
+import { ExpensesService } from '../../services/expensesService';
 import { formatCurrency, formatCurrencyInCR } from '../../utils/calculations';
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export const Analytics: React.FC = () => {
-  const [trades] = useLocalStorage<Trade[]>(STORAGE_KEYS.TRADES, []);
-  const [expenses] = useLocalStorage<Expense[]>(STORAGE_KEYS.EXPENSES, []);
-  const [income] = useLocalStorage<Income[]>(STORAGE_KEYS.INCOME, []);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [income, setIncome] = useState<Income[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load all data from database
+  React.useEffect(() => {
+    const loadAllData = async () => {
+      try {
+        console.log('📊 Analytics: Loading all data from database...');
+        
+        // Load trades
+        const { trades: dbTrades, error: tradesError } = await TradeService.getTrades();
+        if (tradesError) {
+          console.error('❌ Analytics: Error loading trades:', tradesError);
+        } else {
+          console.log('✅ Analytics: Loaded', dbTrades.length, 'trades from database');
+          setTrades(dbTrades);
+        }
+
+        // Load expenses
+        const { expenses: dbExpenses, error: expensesError } = await ExpensesService.getExpenses();
+        if (expensesError) {
+          console.error('❌ Analytics: Error loading expenses:', expensesError);
+        } else {
+          console.log('✅ Analytics: Loaded', dbExpenses.length, 'expenses from database');
+          setExpenses(dbExpenses);
+        }
+
+        // Load income
+        const { income: dbIncome, error: incomeError } = await IncomeService.getIncome();
+        if (incomeError) {
+          console.error('❌ Analytics: Error loading income:', incomeError);
+        } else {
+          console.log('✅ Analytics: Loaded', dbIncome.length, 'income from database');
+          setIncome(dbIncome);
+        }
+      } catch (error) {
+        console.error('❌ Analytics: Unexpected error loading data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, []);
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: ''
@@ -198,6 +242,17 @@ export const Analytics: React.FC = () => {
     },
   ];
 
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

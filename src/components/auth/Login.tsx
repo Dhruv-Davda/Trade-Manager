@@ -1,32 +1,62 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Coins, Mail, Building, Phone } from 'lucide-react';
+import { Coins, Mail, Building, Phone, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { login, signUp, signIn } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
+    password: '',
     businessName: '',
     phoneNumber: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    login({
-      email: formData.email,
-      businessName: formData.businessName || 'My Business',
-      phoneNumber: formData.phoneNumber || '',
-    });
+    try {
+      if (isSignUp) {
+        const result = await signUp(
+          formData.email,
+          formData.password,
+          formData.businessName,
+          formData.phoneNumber
+        );
+        
+        if (!result.success) {
+          if (result.error === 'EMAIL_CONFIRMATION_REQUIRED') {
+            setSuccessMessage('Account created successfully! Please check your email and click the confirmation link to activate your account.');
+          } else {
+            setError(result.error || 'Sign up failed');
+          }
+        } else {
+          setSuccessMessage('Account created successfully! Please check your email for a welcome message and confirmation link.');
+        }
+      } else {
+        console.log('🔐 Login: Starting sign in process...');
+        const result = await signIn(formData.email, formData.password);
+        console.log('🔐 Login: Sign in result:', result);
+        
+        if (!result.success) {
+          console.error('❌ Login: Sign in failed:', result.error);
+          setError(result.error || 'Sign in failed');
+        } else {
+          console.log('✅ Login: Sign in successful');
+        }
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    }
     
     setIsLoading(false);
   };
@@ -38,13 +68,6 @@ export const Login: React.FC = () => {
     });
   };
 
-  const demoLogin = () => {
-    login({
-      email: 'demo@trademanager.com',
-      businessName: 'Gold & Silver Trading Co.',
-      phoneNumber: '+91 98765 43210',
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-4">
@@ -64,6 +87,18 @@ export const Login: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <p className="text-green-400 text-sm">{successMessage}</p>
+              </div>
+            )}
+
             <Input
               type="email"
               name="email"
@@ -71,6 +106,17 @@ export const Login: React.FC = () => {
               placeholder="Enter your email"
               icon={<Mail className="w-4 h-4" />}
               value={formData.email}
+              onChange={handleInputChange}
+              required
+            />
+
+            <Input
+              type="password"
+              name="password"
+              label="Password"
+              placeholder="Enter your password"
+              icon={<Lock className="w-4 h-4" />}
+              value={formData.password}
               onChange={handleInputChange}
               required
             />
@@ -109,22 +155,14 @@ export const Login: React.FC = () => {
             </Button>
           </form>
 
-          <div className="mt-4 flex flex-col space-y-2">
+          <div className="mt-4">
             <button
               type="button"
               onClick={() => setIsSignUp(!isSignUp)}
-              className="text-center text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-center text-sm text-gray-400 hover:text-white transition-colors w-full"
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
-            
-            <Button
-              variant="outline"
-              onClick={demoLogin}
-              className="w-full"
-            >
-              Try Demo Account
-            </Button>
           </div>
         </div>
       </motion.div>
