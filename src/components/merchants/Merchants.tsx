@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Plus, Edit, Trash2, Phone, Mail, MapPin, RefreshCw } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Phone, Mail, MapPin } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -215,16 +215,10 @@ export const Merchants: React.FC = () => {
             <p className="text-gray-400">Manage your business partners</p>
           </div>
         </div>
-        <div className="flex space-x-2">
-          <Button onClick={loadAllData} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Merchant
-          </Button>
-        </div>
+        <Button onClick={() => setShowAddModal(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Merchant
+        </Button>
       </motion.div>
 
       {/* Summary */}
