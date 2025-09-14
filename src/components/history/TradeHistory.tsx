@@ -208,9 +208,7 @@ export const TradeHistory: React.FC = () => {
 
           const matchesSearch = merchantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                notes.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchesType = filterType.includes('all') || filterType.includes(tradeType) || 
-                             (filterType.includes('cash') && trade.settlementType === 'cash') ||
-                             (filterType.includes('bill') && trade.settlementType === 'bill');
+          const matchesType = filterType.includes('all') || filterType.includes(tradeType);
           const matchesMetal = filterMetal === 'all' || metalType === filterMetal;
           
           const shouldInclude = matchesSearch && matchesType && matchesMetal;

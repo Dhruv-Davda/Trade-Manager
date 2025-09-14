@@ -69,6 +69,10 @@ export interface Database {
           transfer_charges: number | null;
           pickup_location: string | null;
           drop_location: string | null;
+          amount_paid: number | null;
+          amount_received: number | null;
+          labor_charges: number | null;
+          payment_type: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -91,6 +95,10 @@ export interface Database {
           transfer_charges?: number | null;
           pickup_location?: string | null;
           drop_location?: string | null;
+          amount_paid?: number | null;
+          amount_received?: number | null;
+          labor_charges?: number | null;
+          payment_type?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -113,6 +121,10 @@ export interface Database {
           transfer_charges?: number | null;
           pickup_location?: string | null;
           drop_location?: string | null;
+          amount_paid?: number | null;
+          amount_received?: number | null;
+          labor_charges?: number | null;
+          payment_type?: string | null;
           notes?: string | null;
           updated_at?: string;
         };

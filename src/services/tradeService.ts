@@ -19,6 +19,10 @@ export interface DatabaseTrade {
   transfer_charges: number | null;
   pickup_location: string | null;
   drop_location: string | null;
+  amount_paid: number | null;
+  amount_received: number | null;
+  labor_charges: number | null;
+  payment_type: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -124,9 +128,13 @@ export class TradeService {
         weight: dbTrade.quantity,
         pricePerUnit: dbTrade.rate,
         totalAmount: dbTrade.amount,
+        amountPaid: dbTrade.amount_paid || 0,
+        amountReceived: dbTrade.amount_received || 0,
+        laborCharges: dbTrade.labor_charges || 0,
         transferCharges: dbTrade.transfer_charges || 0,
         pickupLocation: dbTrade.pickup_location,
         dropLocation: dbTrade.drop_location,
+        paymentType: dbTrade.payment_type as any,
         settlementType: dbTrade.settlement_type,
         settlementDirection: dbTrade.settlement_direction,
         notes: dbTrade.notes || '',
@@ -181,6 +189,10 @@ export class TradeService {
         transfer_charges: trade.transferCharges || null,
         pickup_location: trade.pickupLocation || null,
         drop_location: trade.dropLocation || null,
+        amount_paid: trade.amountPaid || null,
+        amount_received: trade.amountReceived || null,
+        labor_charges: trade.laborCharges || null,
+        payment_type: trade.paymentType || null,
         notes: trade.notes || null,
       };
 
@@ -204,9 +216,13 @@ export class TradeService {
         weight: data.quantity,
         pricePerUnit: data.rate,
         totalAmount: data.amount,
+        amountPaid: data.amount_paid || 0,
+        amountReceived: data.amount_received || 0,
+        laborCharges: data.labor_charges || 0,
         transferCharges: data.transfer_charges || 0,
         pickupLocation: data.pickup_location,
         dropLocation: data.drop_location,
+        paymentType: data.payment_type as any,
         settlementType: data.settlement_type,
         settlementDirection: data.settlement_direction,
         notes: data.notes || '',
@@ -256,6 +272,10 @@ export class TradeService {
       if (updates.transferCharges !== undefined) updateData.transfer_charges = updates.transferCharges || null;
       if (updates.pickupLocation !== undefined) updateData.pickup_location = updates.pickupLocation || null;
       if (updates.dropLocation !== undefined) updateData.drop_location = updates.dropLocation || null;
+      if (updates.amountPaid !== undefined) updateData.amount_paid = updates.amountPaid || null;
+      if (updates.amountReceived !== undefined) updateData.amount_received = updates.amountReceived || null;
+      if (updates.laborCharges !== undefined) updateData.labor_charges = updates.laborCharges || null;
+      if (updates.paymentType !== undefined) updateData.payment_type = updates.paymentType || null;
       if (updates.notes !== undefined) updateData.notes = updates.notes || null;
 
       // Get user profile to get the email
@@ -296,9 +316,13 @@ export class TradeService {
         weight: data.quantity,
         pricePerUnit: data.rate,
         totalAmount: data.amount,
+        amountPaid: data.amount_paid || 0,
+        amountReceived: data.amount_received || 0,
+        laborCharges: data.labor_charges || 0,
         transferCharges: data.transfer_charges || 0,
         pickupLocation: data.pickup_location,
         dropLocation: data.drop_location,
+        paymentType: data.payment_type as any,
         settlementType: data.settlement_type,
         settlementDirection: data.settlement_direction,
         notes: data.notes || '',

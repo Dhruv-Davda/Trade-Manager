@@ -209,4 +209,86 @@ export class MerchantsService {
       return { success: false, error: 'An unexpected error occurred' };
     }
   }
+
+  // Update merchant debt based on transaction
+  static async updateMerchantDebt(merchantId: string, debtChange: { totalDue?: number; totalOwe?: number }): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      console.log('💰 Updating merchant debt:', merchantId, debtChange);
+
+      // Get current merchant data
+      const { data: currentMerchant, error: fetchError } = await supabase
+        .from('merchants')
+        .select('total_due, total_owe')
+        .eq('id', merchantId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Error fetching merchant:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+
+      // Calculate new debt amounts
+      const newTotalDue = (currentMerchant.total_due || 0) + (debtChange.totalDue || 0);
+      const newTotalOwe = (currentMerchant.total_owe || 0) + (debtChange.totalOwe || 0);
+
+      console.log('💰 New debt amounts:', { newTotalDue, newTotalOwe });
+
+      // Update merchant debt
+      const { error: updateError } = await supabase
+        .from('merchants')
+        .update({
+          total_due: Math.max(0, newTotalDue), // Ensure non-negative
+          total_owe: Math.max(0, newTotalOwe), // Ensure non-negative
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', merchantId)
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('❌ Error updating merchant debt:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      console.log('✅ Merchant debt updated successfully');
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('❌ Unexpected error updating merchant debt:', error);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
+  }
+
+  // Calculate debt change for a transaction
+  static calculateDebtChange(trade: any): { totalDue?: number; totalOwe?: number } {
+    const debtChange: { totalDue?: number; totalOwe?: number } = {};
+
+    if (trade.type === 'buy') {
+      // For buy: if you pay less than total, merchant owes you (totalDue increases)
+      const remainingAmount = (trade.totalAmount || 0) - (trade.amountPaid || 0);
+      if (remainingAmount > 0) {
+        debtChange.totalDue = remainingAmount; // Merchant owes you this amount
+      }
+    } else if (trade.type === 'sell') {
+      // For sell: if you receive less than total, customer owes you (totalDue increases)
+      const remainingAmount = (trade.totalAmount || 0) - (trade.amountReceived || 0);
+      if (remainingAmount > 0) {
+        debtChange.totalDue = remainingAmount; // Customer owes you this amount
+      }
+    } else if (trade.type === 'settlement') {
+      // For settlement: reduce debt based on settlement direction
+      const settlementAmount = trade.totalAmount || 0;
+      if (trade.settlementDirection === 'receiving') {
+        debtChange.totalDue = -settlementAmount; // Reduce what others owe you
+      } else if (trade.settlementDirection === 'paying') {
+        debtChange.totalOwe = -settlementAmount; // Reduce what you owe others
+      }
+    }
+
+    return debtChange;
+  }
 }

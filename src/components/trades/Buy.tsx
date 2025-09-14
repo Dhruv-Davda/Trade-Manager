@@ -118,11 +118,24 @@ export const Buy: React.FC = () => {
       
       console.log('✅ Trade saved successfully:', savedTrade);
       
+      // Update merchant debt based on transaction
+      const debtChange = MerchantsService.calculateDebtChange(newTrade);
+      if (debtChange.totalDue || debtChange.totalOwe) {
+        console.log('💰 Updating merchant debt:', debtChange);
+        const { success: debtUpdateSuccess, error: debtError } = await MerchantsService.updateMerchantDebt(data.merchantId, debtChange);
+        if (!debtUpdateSuccess) {
+          console.error('❌ Error updating merchant debt:', debtError);
+          alert('Trade saved but failed to update merchant debt: ' + debtError);
+        } else {
+          console.log('✅ Merchant debt updated successfully');
+        }
+      }
+      
       // Update local state for immediate UI update
       setTrades([...trades, newTrade]);
 
       reset();
-      alert('Purchase recorded successfully! Stock updated.');
+      alert('Purchase recorded successfully! Merchant debt updated.');
     } catch (error) {
       console.error('❌ Unexpected error saving trade:', error);
       alert('Unexpected error saving trade');
