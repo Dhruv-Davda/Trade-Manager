@@ -5,28 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ghnklvwvglwrhioetezb.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdobmtsdnd2Z2x3cmhpb2V0ZXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MDU3ODAsImV4cCI6MjA3MzA4MTc4MH0.dwdcbR7HMXmqjF1vDivAsOTnvsuMPHGT2xQIQBknFWM';
 
-// Clear browser cache to fix incognito vs normal browser issue
-console.log('🧹 Clearing browser cache for Supabase...');
-try {
-  // Clear all Supabase-related data
-  Object.keys(localStorage).forEach(key => {
-    if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-      localStorage.removeItem(key);
-      console.log('🗑️ Removed localStorage:', key);
-    }
-  });
-  
-  Object.keys(sessionStorage).forEach(key => {
-    if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-      sessionStorage.removeItem(key);
-      console.log('🗑️ Removed sessionStorage:', key);
-    }
-  });
-  
-  console.log('✅ Browser cache cleared');
-} catch (error) {
-  console.log('⚠️ Could not clear cache:', error);
-}
+// Note: Removed automatic cache clearing as it was causing authentication issues
+// If you need to clear cache, do it manually in browser dev tools
 
 // Create Supabase client with session persistence
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -86,6 +66,9 @@ export interface Database {
           party_address: string | null;
           settlement_type: 'cash' | 'bank' | 'gold' | 'silver' | null;
           settlement_direction: 'receiving' | 'paying' | null;
+          transfer_charges: number | null;
+          pickup_location: string | null;
+          drop_location: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -105,6 +88,9 @@ export interface Database {
           party_address?: string | null;
           settlement_type?: 'cash' | 'bank' | 'gold' | 'silver' | null;
           settlement_direction?: 'receiving' | 'paying' | null;
+          transfer_charges?: number | null;
+          pickup_location?: string | null;
+          drop_location?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -124,6 +110,9 @@ export interface Database {
           party_address?: string | null;
           settlement_type?: 'cash' | 'bank' | 'gold' | 'silver' | null;
           settlement_direction?: 'receiving' | 'paying' | null;
+          transfer_charges?: number | null;
+          pickup_location?: string | null;
+          drop_location?: string | null;
           notes?: string | null;
           updated_at?: string;
         };
