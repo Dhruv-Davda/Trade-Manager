@@ -64,7 +64,7 @@ export interface Database {
           party_name: string;
           party_phone: string | null;
           party_address: string | null;
-          settlement_type: 'cash' | 'bank' | 'gold' | 'silver' | null;
+          settlement_type: 'cash' | 'bank' | 'bill' | 'gold' | 'silver' | null;
           settlement_direction: 'receiving' | 'paying' | null;
           transfer_charges: number | null;
           pickup_location: string | null;
@@ -90,7 +90,7 @@ export interface Database {
           party_name: string;
           party_phone?: string | null;
           party_address?: string | null;
-          settlement_type?: 'cash' | 'bank' | 'gold' | 'silver' | null;
+          settlement_type?: 'cash' | 'bank' | 'bill' | 'gold' | 'silver' | null;
           settlement_direction?: 'receiving' | 'paying' | null;
           transfer_charges?: number | null;
           pickup_location?: string | null;
@@ -116,7 +116,7 @@ export interface Database {
           party_name?: string;
           party_phone?: string | null;
           party_address?: string | null;
-          settlement_type?: 'cash' | 'bank' | 'gold' | 'silver' | null;
+          settlement_type?: 'cash' | 'bank' | 'bill' | 'gold' | 'silver' | null;
           settlement_direction?: 'receiving' | 'paying' | null;
           transfer_charges?: number | null;
           pickup_location?: string | null;
