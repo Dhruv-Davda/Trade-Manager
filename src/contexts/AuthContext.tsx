@@ -23,58 +23,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already signed in
-    const checkUser = async () => {
-      try {
-        console.log('🔍 Checking current user...');
-        const { user: currentUser } = await AuthService.getCurrentUser();
-        console.log('👤 Current user result:', currentUser);
-        if (currentUser) {
-          setUser({
-            id: currentUser.id,
-            email: currentUser.email,
-            businessName: currentUser.business_name,
-            phoneNumber: currentUser.phone_number || '',
-            createdAt: new Date(),
-          });
-          console.log('✅ User set successfully');
-        } else {
-          console.log('❌ No current user found');
-        }
-      } catch (error) {
-        console.error('❌ Error checking current user:', error);
-      } finally {
-        setIsLoading(false);
-        console.log('🏁 Auth loading completed');
+    // Listen for auth state changes (this handles both initial load and subsequent changes)
+    const { data: { subscription } } = AuthService.onAuthStateChange((authUser) => {
+      console.log('🔄 Auth state changed:', authUser ? 'User found' : 'No user');
+      if (authUser) {
+        setUser({
+          id: authUser.id,
+          email: authUser.email,
+          businessName: authUser.business_name,
+          phoneNumber: authUser.phone_number || '',
+          createdAt: new Date(),
+        });
+        console.log('✅ User authenticated successfully');
+      } else {
+        setUser(null);
+        console.log('❌ No user authenticated');
       }
-    };
-
-    checkUser();
-
-    // Listen for auth state changes
-    try {
-      const { data: { subscription } } = AuthService.onAuthStateChange((authUser) => {
-        if (authUser) {
-          setUser({
-            id: authUser.id,
-            email: authUser.email,
-            businessName: authUser.business_name,
-            phoneNumber: authUser.phone_number || '',
-            createdAt: new Date(),
-          });
-        } else {
-          setUser(null);
-        }
-        setIsLoading(false);
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    } catch (error) {
-      console.error('Error setting up auth state listener:', error);
       setIsLoading(false);
-    }
+    });
+
+    return () => {
+      console.log('🧹 Cleaning up auth listener');
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = (userData: Omit<User, 'id' | 'createdAt'>) => {
@@ -142,10 +113,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = async () => {
-    setIsLoading(true);
-    await AuthService.signOut();
-    setUser(null);
-    setIsLoading(false);
+    try {
+      console.log('🚪 Logging out...');
+      setIsLoading(true);
+      
+      // Clear any cached data
+      try {
+        const { dataCache } = await import('../hooks/useDataCache');
+        dataCache.clear();
+        console.log('🧹 Cleared data cache');
+      } catch (error) {
+        console.log('⚠️ Could not clear cache:', error);
+      }
+      
+      await AuthService.signOut();
+      setUser(null);
+      console.log('✅ Logout completed');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const value = {
