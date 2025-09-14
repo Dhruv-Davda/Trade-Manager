@@ -17,6 +17,7 @@ interface BuyFormData {
   metalType: MetalType;
   weight: number;
   pricePerUnit: number;
+  laborCharges: number;
   amountPaid: number;
   settlementType: SettlementType;
   notes?: string;
@@ -76,11 +77,15 @@ export const Buy: React.FC = () => {
   };
 
   const watchedValues = watch();
-  // const totalAmount = Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0)/10;
-  const totalAmount = watchedValues.metalType === 'gold'
+  // Calculate metal value
+  const metalValue = watchedValues.metalType === 'gold'
   ? Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0) / 10
   : Number(watchedValues.weight || 0) * Number(watchedValues.pricePerUnit || 0);
-  const remainingAmount = Number(totalAmount )- Number(watchedValues.amountPaid || 0);
+  
+  // Calculate total amount including labor charges
+  const laborCharges = Number(watchedValues.laborCharges || 0);
+  const totalAmount = metalValue + laborCharges;
+  const remainingAmount = Number(totalAmount) - Number(watchedValues.amountPaid || 0);
 
   const onSubmit = async (data: BuyFormData) => {
     console.log('Form submitted with data:', data);
@@ -90,21 +95,22 @@ export const Buy: React.FC = () => {
       return;
     }
 
-    const newTrade: Trade = {
-      id: generateId(),
-      type: 'buy',
-      merchantId: data.merchantId,
-      merchantName: selectedMerchant.name,
-      metalType: data.metalType,
-      weight: data.weight,
-      pricePerUnit: data.pricePerUnit,
-      totalAmount,
-      amountPaid: data.amountPaid,
-      settlementType: data.settlementType,
-      notes: data.notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      const newTrade: Trade = {
+        id: generateId(),
+        type: 'buy',
+        merchantId: data.merchantId,
+        merchantName: selectedMerchant.name,
+        metalType: data.metalType,
+        weight: data.weight,
+        pricePerUnit: data.pricePerUnit,
+        totalAmount,
+        amountPaid: data.amountPaid,
+        laborCharges: data.laborCharges,
+        settlementType: data.settlementType,
+        notes: data.notes,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
     console.log('Adding new trade to database:', newTrade);
     
@@ -282,15 +288,38 @@ export const Buy: React.FC = () => {
             />
           </div>
 
+          <div>
+            <Input
+              label="Labor Charges (Optional)"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              {...register('laborCharges', { 
+                min: { value: 0, message: 'Labor charges cannot be negative' }
+              })}
+              error={errors.laborCharges?.message}
+            />
+          </div>
+
           {totalAmount > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-gray-700 p-4 rounded-lg"
+              className="bg-gray-700 p-4 rounded-lg space-y-2"
             >
-              <div className="flex justify-between items-center text-sm mb-2">
-                <span className="text-gray-300">Total Amount:</span>
-                <span className="text-white font-medium">{formatCurrency(totalAmount)}</span>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-300">Metal Value:</span>
+                <span className="text-white font-medium">{formatCurrency(metalValue)}</span>
+              </div>
+              {laborCharges > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-300">Labor Charges:</span>
+                  <span className="text-white font-medium">{formatCurrency(laborCharges)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-sm pt-2 border-t border-gray-600">
+                <span className="text-gray-300 font-medium">Total Amount:</span>
+                <span className="text-white font-bold">{formatCurrency(totalAmount)}</span>
               </div>
             </motion.div>
           )}
