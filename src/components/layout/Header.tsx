@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Menu, User, LogOut, X } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext-simple';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 

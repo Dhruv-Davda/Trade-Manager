@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Coins, Mail, Building, Phone, Lock } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext-simple';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export const Login: React.FC = () => {
-  const { login, signUp, signIn } = useAuth();
+  const { signUp, signIn } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
