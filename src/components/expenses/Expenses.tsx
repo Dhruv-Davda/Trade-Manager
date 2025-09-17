@@ -136,7 +136,7 @@ export const Expenses: React.FC = () => {
 
   const deleteExpense = async (expenseId: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
-      console.log('🗑️ Deleting expense from database:', expenseId);
+      console.log('🗑️ Deleting expense from database');
       
       try {
         const { error } = await ExpensesService.deleteExpense(expenseId);

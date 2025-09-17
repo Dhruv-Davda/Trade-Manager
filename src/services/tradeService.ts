@@ -111,7 +111,7 @@ export class TradeService {
         return { trades: [], error: 'User profile not found' };
       }
 
-      console.log('🔍 Getting trades for email:', userProfile.email);
+      console.log('🔍 Getting trades for user');
 
       // Use email-based query for shared data
       const { data, error } = await supabase
@@ -306,8 +306,7 @@ export class TradeService {
       }
 
       console.log('🔍 Update data being sent:', updateData);
-      console.log('🔍 Trade ID:', tradeId);
-      console.log('🔍 User email:', userProfile.email);
+      console.log('🔍 Updating trade');
 
       const { data, error } = await supabase
         .from('trades')

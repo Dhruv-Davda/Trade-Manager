@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             phoneNumber: currentUser.phone_number || '',
             createdAt: new Date(),
           });
-          console.log('✅ User authenticated:', currentUser.email);
+          console.log('✅ User authenticated');
         } else {
           console.log('❌ No user found');
           setUser(null);

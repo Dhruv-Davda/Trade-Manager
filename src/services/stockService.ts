@@ -52,7 +52,7 @@ export class StockService {
         return { stock: [], error: 'User profile not found' };
       }
 
-      console.log('🔍 Getting stock for user:', user.id);
+      console.log('🔍 Getting stock for user');
 
       const { data, error } = await supabase
         .from('stock')
@@ -172,7 +172,7 @@ export class StockService {
         return { stock: [], error: 'User profile not found' };
       }
 
-      console.log('🧮 Calculating stock from trades for user:', user.id);
+      console.log('🧮 Calculating stock from trades');
 
       // Get all trades
       const { data: trades, error: tradesError } = await supabase
@@ -254,7 +254,7 @@ export class StockService {
         return { success: false, error: 'User profile not found' };
       }
 
-      console.log('🗑️ Clearing stock from database for user:', user.id);
+      console.log('🗑️ Clearing stock from database');
 
       const { error } = await supabase
         .from('stock')

@@ -37,7 +37,7 @@ export class AuthService {
         }
       });
 
-      console.log('Signup response:', { authData, authError });
+      console.log('Signup response received');
 
       if (authError) {
         return { user: null, error: authError.message };
@@ -47,7 +47,7 @@ export class AuthService {
         return { user: null, error: 'Failed to create user' };
       }
 
-      console.log('User email confirmed at:', authData.user.email_confirmed_at);
+      console.log('User email confirmed');
 
       // Always require email confirmation for new signups
       console.log('Email confirmation required');
@@ -85,27 +85,8 @@ The TradeManager Team
 
       // For now, we'll just log the email content
       // In a real app, you'd integrate with an email service
-      console.log('Welcome email would be sent to:', email);
-      console.log('Email content:', `
-Subject: 🎉 Welcome to TradeManager!
-To: ${email}
-
-Hi ${businessName || 'there'}!
-
-Welcome to TradeManager! 🎉
-
-Thank you for joining our platform. You can now:
-
-📊 Track your gold and silver trades
-📈 View analytics and reports  
-💰 Manage your business finances
-📱 Access your data from anywhere
-
-Get started by visiting: ${window.location.origin}/dashboard
-
-Best regards,
-The TradeManager Team
-      `);
+      console.log('Welcome email would be sent');
+      console.log('Email content prepared');
 
       // Optional: Open email client (commented out to avoid popup)
       // window.open(`mailto:${email}?subject=${subject}&body=${body}`);
@@ -119,7 +100,7 @@ The TradeManager Team
   // Sign in existing user
   static async signIn(data: SignInData): Promise<{ user: AuthUser | null; error: string | null }> {
     try {
-      console.log('🔐 AuthService: Starting sign in for:', data.email);
+      console.log('🔐 AuthService: Starting sign in');
       
       // Try direct sign in without timeout first
       console.log('🔐 AuthService: Attempting direct sign in...');
@@ -128,7 +109,7 @@ The TradeManager Team
         password: data.password,
       });
 
-      console.log('🔐 AuthService: Sign in response:', { authData: !!authData, authError });
+      console.log('🔐 AuthService: Sign in response received');
 
       if (authError) {
         console.error('❌ AuthService: Sign in error:', authError.message);
@@ -140,7 +121,7 @@ The TradeManager Team
         return { user: null, error: 'Failed to sign in' };
       }
 
-      console.log('👤 AuthService: User authenticated, checking for existing profile...');
+      console.log('👤 AuthService: User authenticated, checking for existing profile');
       
       // Check if user profile already exists by email
       const { data: existingProfile } = await supabase
@@ -166,7 +147,7 @@ The TradeManager Team
         }
         profileData = updatedProfile;
       } else {
-        console.log('👤 AuthService: Creating new profile...');
+        console.log('👤 AuthService: Creating new profile');
         // Create user profile
         const { data: newProfile, error: profileError } = await supabase
           .from('users')
@@ -220,11 +201,11 @@ The TradeManager Team
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
       if (authError || !authUser) {
-        console.log('❌ AuthService: No user found or error:', authError?.message || 'No user found');
+        console.log('❌ AuthService: No user found or error');
         return { user: null, error: authError?.message || 'No user found' };
       }
 
-      console.log('👤 AuthService: User found, fetching profile...');
+      console.log('👤 AuthService: User found, fetching profile');
       // Get user profile
       const { data: profileData, error: profileError } = await supabase
         .from('users')

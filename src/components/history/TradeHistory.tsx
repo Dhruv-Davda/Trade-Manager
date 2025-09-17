@@ -91,7 +91,7 @@ export const TradeHistory: React.FC = () => {
       return;
     }
 
-    console.log('💾 Updating trade in database:', editingTrade.id, data);
+    console.log('💾 Updating trade in database');
     console.log('💾 Original trade data:', editingTrade);
     
     try {
@@ -147,7 +147,7 @@ export const TradeHistory: React.FC = () => {
   const handleDeleteTrade = async (tradeId: string) => {
     if (!window.confirm('Are you sure you want to delete this trade?')) return;
 
-    console.log('🗑️ Deleting trade from database:', tradeId);
+    console.log('🗑️ Deleting trade from database');
     
     try {
       const { error } = await TradeService.deleteTrade(tradeId);

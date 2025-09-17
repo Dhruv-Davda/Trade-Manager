@@ -60,7 +60,7 @@ export class IncomeService {
         return { income: [], error: 'User profile not found' };
       }
 
-      console.log('🔍 Getting income for user:', user.id);
+      console.log('🔍 Getting income for user');
 
       const { data, error } = await supabase
         .from('income')
@@ -196,7 +196,7 @@ export class IncomeService {
         return { success: false, error: 'User profile not found' };
       }
 
-      console.log('🗑️ Deleting income from database:', incomeId);
+      console.log('🗑️ Deleting income from database');
 
       const { error } = await supabase
         .from('income')

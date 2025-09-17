@@ -84,17 +84,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('🔐 AuthContext: Starting sign in...');
+    console.log('🔐 AuthContext: Starting sign in');
     setIsLoading(true);
     const { user: authUser, error } = await AuthService.signIn({
       email,
       password,
     });
 
-    console.log('🔐 AuthContext: Sign in response:', { authUser: !!authUser, error });
+    console.log('🔐 AuthContext: Sign in response received');
 
     if (authUser && !error) {
-      console.log('✅ AuthContext: Setting user state...');
+      console.log('✅ AuthContext: Setting user state');
       setUser({
         id: authUser.id,
         email: authUser.email,

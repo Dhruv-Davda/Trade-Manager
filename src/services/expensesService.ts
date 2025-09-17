@@ -60,7 +60,7 @@ export class ExpensesService {
         return { expenses: [], error: 'User profile not found' };
       }
 
-      console.log('🔍 Getting expenses for user:', user.id);
+      console.log('🔍 Getting expenses for user');
 
       const { data, error } = await supabase
         .from('expenses')
@@ -196,7 +196,7 @@ export class ExpensesService {
         return { success: false, error: 'User profile not found' };
       }
 
-      console.log('🗑️ Deleting expense from database:', expenseId);
+      console.log('🗑️ Deleting expense from database');
 
       const { error } = await supabase
         .from('expenses')

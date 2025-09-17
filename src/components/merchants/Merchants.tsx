@@ -192,7 +192,7 @@ export const Merchants: React.FC = () => {
     }
 
     if (window.confirm('Are you sure you want to delete this merchant?')) {
-      console.log('🗑️ Deleting merchant from database:', merchantId);
+      console.log('🗑️ Deleting merchant from database');
       
       try {
         const { success, error } = await MerchantsService.deleteMerchant(merchantId);
@@ -321,8 +321,8 @@ export const Merchants: React.FC = () => {
             // Debug logging for first merchant
             if (index === 0) {
               console.log('🔍 Merchants: Debug for merchant:', merchant.name);
-              console.log('🔍 Merchants: Merchant ID:', merchant.id);
-              console.log('🔍 Merchants: Trades for this merchant:', trades.filter(trade => trade.merchantId === merchant.id));
+              console.log('🔍 Merchants: Processing merchant');
+              console.log('🔍 Merchants: Trades for this merchant');
               console.log('🔍 Merchants: Calculated balance:', balance);
             }
             

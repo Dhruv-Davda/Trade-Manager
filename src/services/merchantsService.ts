@@ -64,7 +64,7 @@ export class MerchantsService {
         return { merchants: [], error: 'User profile not found' };
       }
 
-      console.log('🔍 Getting merchants for user:', user.id);
+      console.log('🔍 Getting merchants for user');
 
       const { data, error } = await supabase
         .from('merchants')
@@ -200,7 +200,7 @@ export class MerchantsService {
         return { success: false, error: 'User profile not found' };
       }
 
-      console.log('🗑️ Deleting merchant from database:', merchantId);
+      console.log('🗑️ Deleting merchant from database');
 
       const { error } = await supabase
         .from('merchants')
@@ -240,7 +240,7 @@ export class MerchantsService {
         return { success: false, error: 'User profile not found' };
       }
 
-      console.log('💰 Updating merchant debt:', merchantId, debtChange);
+      console.log('💰 Updating merchant debt');
 
       // Get current merchant data
       const { data: currentMerchant, error: fetchError } = await supabase

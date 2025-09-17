@@ -150,7 +150,7 @@ export const IncomeManagement: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this income entry?')) {
-      console.log('🗑️ Deleting income from database:', id);
+      console.log('🗑️ Deleting income from database');
       
       try {
         const { error } = await IncomeService.deleteIncome(id);
